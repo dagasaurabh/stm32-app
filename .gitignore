@@ -48,3 +48,7 @@ Thumbs.db
 *.mov
 *.wmv
 
+
+toolchain/.*
+toolchain/*.xz
+toolchain/gcc-arm-none-eabi
