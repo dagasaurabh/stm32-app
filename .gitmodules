@@ -1,0 +1,6 @@
+[submodule "hal/STM32CubeL5"]
+	path = hal/STM32CubeL5
+	url = https://github.com/STMicroelectronics/STM32CubeL5.git
+[submodule "hal/STM32CubeU5"]
+	path = hal/STM32CubeU5
+	url = https://github.com/STMicroelectronics/STM32CubeU5.git
