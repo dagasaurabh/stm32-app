@@ -52,3 +52,6 @@ Thumbs.db
 toolchain/.*
 toolchain/*.xz
 toolchain/gcc-arm-none-eabi
+build/*
+ext/*/
+!ext/Makefile
