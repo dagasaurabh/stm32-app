@@ -1,4 +1,4 @@
-set(TOOLCHAIN_PATH ${CMAKE_CURRENT_LIST_DIR}/toolchain/gcc-arm-none-eabi/bin)
+set(TOOLCHAIN_PATH ${CMAKE_CURRENT_LIST_DIR}/gcc-arm-none-eabi/bin)
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -8,6 +8,7 @@ set(CMAKE_C_COMPILER   ${TOOLCHAIN_PATH}/arm-none-eabi-gcc)
 set(CMAKE_ASM_COMPILER ${CMAKE_C_COMPILER})
 set(CMAKE_OBJCOPY      ${TOOLCHAIN_PATH}/arm-none-eabi-objcopy)
 set(CMAKE_SIZE         ${TOOLCHAIN_PATH}/arm-none-eabi-size)
+set(CMAKE_GDB          ${TOOLCHAIN_PATH}/arm-none-eabi-gdb)
 
 SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
