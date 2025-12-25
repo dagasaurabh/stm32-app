@@ -12,7 +12,6 @@ target_compile_definitions(board PUBLIC BOARD_HAS_LED BOARD_HAS_BUTTON)
 
 target_link_libraries(board
     mcu_stm32l5
-    stm32l5_hal
     platform_common
 )
 
