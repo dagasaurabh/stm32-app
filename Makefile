@@ -6,7 +6,7 @@ TYPE  ?= Debug
 SYSROOT := $(BUILD)/$(TYPE)/sysroot
 
 # Tools sysroot (shared across build types)
-TOOLS_SYSROOT := $(T)/build/$(BOARD)/tools/sysroot
+TOOLS_SYSROOT := $(T)/build/tools/sysroot
 
 CMAKE_PREFIX_PATH := \
   $(TOOLS_SYSROOT)/usr/local; \
