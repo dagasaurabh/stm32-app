@@ -1,29 +1,29 @@
-# README #
+# STM32 Firmware Framework (CMake + Makefile)
 
-This README would normally document whatever steps are necessary to get your application up and running.
+A **vendor-IDE-free STM32 firmware framework** designed for developers who prefer:
 
-### What is this repository for? ###
+- CMake over STM32CubeIDE
+- Vim / CLI workflows
+- explicit architecture over hidden IDE behavior
+- scalable multi-board, multi-project builds
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+This repository provides a **clean separation between MCU, board, and application layers**, while remaining compatible with STM32Cube HAL, CMSIS, and OpenOCD.
 
-### How do I get set up? ###
+---
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+## What this repository is
 
-### Contribution guidelines ###
+- A **firmware build framework**  
+- Multi-board, multi-application  
+- Reproducible local + CI builds  
+- Suitable for professional embedded teams  
 
-* Writing tests
-* Code review
-* Other guidelines
+---
 
-### Who do I talk to? ###
+## What this repository is NOT
 
-* Repo owner or admin
-* Other community or team contact
+- An STM32CubeIDE replacement GUI  
+- A HAL abstraction layer  
+- A hardware testing framework (yet)  
+
+---
