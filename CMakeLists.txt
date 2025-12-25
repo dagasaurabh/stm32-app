@@ -13,7 +13,6 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tools"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform/cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform/boards/${BOARD}/cmake"
 )
@@ -21,6 +20,12 @@ list(APPEND CMAKE_MODULE_PATH
 
 # Load board configuration
 include(board)
+
+# Validate
+if(NOT DEFINED MCU_FAMILY)
+    message(FATAL_ERROR "Board did not define MCU_FAMILY")
+endif()
+
 include(platform_flags)
 include(FindOpenOCD)
 
@@ -29,12 +34,13 @@ set(OPENOCD_CFG
 )
 
 find_openocd()
-
 add_platform_flags(platform_mcu)
 
+# Load MCU HAL registry
+add_subdirectory(platform/mcu/${MCU_FAMILY})
+include(HalSelection)
 
 # Now build platform layers
 add_subdirectory(platform/common)
-add_subdirectory(platform/mcu/${MCU_FAMILY})
 add_subdirectory(platform/boards/${BOARD})
 add_subdirectory(app)

@@ -1,6 +1,7 @@
 
 function(build_app APP)
-    set(MAP_FILE ${CMAKE_BINARY_DIR}/${APP}.map)
+
+    set(MAP_FILE ${CMAKE_CURRENT_BINARY_DIR}/${APP}.map)
 
     target_link_options(${APP}.elf PRIVATE
         -Wl,-Map=${MAP_FILE}
@@ -34,11 +35,24 @@ function(build_app APP)
     add_custom_target(${APP}_gdb
         COMMAND ${CMAKE_GDB}
             $<TARGET_FILE:${APP}.elf>
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         USES_TERMINAL
     )
 
 endfunction(build_app)
+
+function(use_mcu APP)
+    target_sources(${APP}.elf PRIVATE
+        $<TARGET_OBJECTS:mcu_${MCU_FAMILY}>
+    )
+endfunction()
+
+function(use_board APP)
+    target_sources(${APP}.elf PRIVATE
+        $<TARGET_OBJECTS:board>
+    )
+endfunction()
+
 
 
 add_subdirectory(projects/blinky)
