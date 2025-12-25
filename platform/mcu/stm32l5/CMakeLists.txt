@@ -1,8 +1,6 @@
 
 add_subdirectory(hal)
 
-include(stm32_hal)
-
 add_library(mcu_stm32l5 OBJECT
     ${CMAKE_CURRENT_LIST_DIR}/src/system_stm32l5.c
     ${CMAKE_CURRENT_LIST_DIR}/startup/startup_stm32l552xx.s
@@ -23,5 +21,3 @@ target_link_options(platform_mcu INTERFACE
 
 # Inherit MCU flags from platform_mcu
 target_link_libraries(mcu_stm32l5 PUBLIC platform_mcu)
-
-add_stm32_hal(l5 ${HAL_SOURCES})
