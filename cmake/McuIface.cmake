@@ -1,8 +1,6 @@
-# Guard against double inclusion
 include_guard(GLOBAL)
 
-function(add_platform_flags TARGET_NAME)
-    # Create interface library
+function(add_mcu_compile_iface TARGET_NAME)
     add_library(${TARGET_NAME} INTERFACE)
 
     if(DEFINED MCU_DEFINES)
@@ -29,5 +27,17 @@ function(add_platform_flags TARGET_NAME)
         $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-Wl,--gc-sections>
     )
 
-endfunction()
+endfunction(add_mcu_compile_iface)
 
+function(add_mcu_hal_iface TARGET_NAME)
+    add_library(${TARGET_NAME} INTERFACE)
+
+    if(DEFINED MCU_DEFINES)
+        target_compile_definitions(${TARGET_NAME} INTERFACE ${MCU_DEFINES})
+    endif()
+
+    if(DEFINED MCU_HAL_INCLUDES)
+        target_include_directories(${TARGET_NAME} INTERFACE ${MCU_HAL_INCLUDES})
+    endif()
+
+endfunction(add_mcu_hal_iface)
