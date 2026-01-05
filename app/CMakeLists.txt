@@ -41,18 +41,5 @@ function(build_app APP)
 
 endfunction(build_app)
 
-function(use_mcu APP)
-    target_sources(${APP}.elf PRIVATE
-        $<TARGET_OBJECTS:mcu_${MCU_FAMILY}>
-    )
-endfunction()
-
-function(use_board APP)
-    target_sources(${APP}.elf PRIVATE
-        $<TARGET_OBJECTS:board>
-    )
-endfunction()
-
-
-
 add_subdirectory(projects/blinky)
+add_subdirectory(projects/helloworld)
