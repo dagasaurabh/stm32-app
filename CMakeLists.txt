@@ -13,10 +13,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/platform/cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform/boards/${BOARD}/cmake"
 )
-
 
 # Load board configuration
 include(board)
@@ -26,21 +24,27 @@ if(NOT DEFINED MCU_FAMILY)
     message(FATAL_ERROR "Board did not define MCU_FAMILY")
 endif()
 
-include(platform_flags)
+include(McuIface)
 include(FindOpenOCD)
 
-set(OPENOCD_CFG
-    ${CMAKE_SOURCE_DIR}/platform/boards/${BOARD}/openocd.cfg
-)
+set(OPENOCD_CFG ${CMAKE_SOURCE_DIR}/platform/boards/${BOARD}/openocd.cfg)
 
 find_openocd()
-add_platform_flags(platform_mcu)
+
+# exports mcu compile,linker and build type specific flags
+set(MCU_TOOLCHAIN_LIB mcu_compile_iface)
+
+# exports HAL headers
+set(MCU_HAL_LIB mcu_hal_iface)
+
+add_mcu_compile_iface(${MCU_TOOLCHAIN_LIB})
+add_mcu_hal_iface(${MCU_HAL_LIB})
+
+option(CONFIG_BOARD_CONSOLE "Enable board console (STDIO)" ON)
 
 # Load MCU HAL registry
-add_subdirectory(platform/mcu/${MCU_FAMILY})
-include(HalSelection)
-
-# Now build platform layers
+add_subdirectory(platform/mcu)
+add_subdirectory(platform/drivers)
 add_subdirectory(platform/common)
-add_subdirectory(platform/boards/${BOARD})
+add_subdirectory(platform/boards)
 add_subdirectory(app)
