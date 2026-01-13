@@ -77,6 +77,36 @@ void HAL_MspInit(void)
   /* USER CODE END MspInit 1 */
 }
 
+void HAL_UART_MspInit(UART_HandleTypeDef *huart)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    if (huart->Instance == LPUART1) {
+        __HAL_RCC_LPUART1_CLK_ENABLE();
+        __HAL_RCC_GPIOG_CLK_ENABLE();
+
+        GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
+        HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+    }
+
+    if (huart->Instance == USART3) {
+        __HAL_RCC_USART3_CLK_ENABLE();
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+
+        GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF7_USART3;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    }
+}
+
+
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
