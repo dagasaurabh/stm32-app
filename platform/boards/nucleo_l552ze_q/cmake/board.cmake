@@ -76,3 +76,20 @@ set(MCU_LINK_OPTIONS
     INTERNAL 
     ""
 )
+
+set(MCU_HAL_ROOT
+    ${CMAKE_SOURCE_DIR}/hal/STM32CubeL5
+    CACHE
+    INTERNAL
+    ""
+)
+
+set(MCU_HAL_INCLUDES
+    ${CMAKE_SOURCE_DIR}/platform/mcu/${MCU_FAMILY}/include
+    ${MCU_HAL_ROOT}/Drivers/CMSIS/Include
+    ${MCU_HAL_ROOT}/Drivers/CMSIS/Device/ST/STM32L5xx/Include
+    ${MCU_HAL_ROOT}/Drivers/STM32L5xx_HAL_Driver/Inc
+    CACHE
+    INTERNAL
+    ""
+)
