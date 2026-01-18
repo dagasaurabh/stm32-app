@@ -1,11 +1,9 @@
 #pragma once
 
-#include "stm32l5xx_hal.h"
+#include "gpio.h"
 
 /* User LED (LD2) */
-#define LED_GPIO_PORT   GPIOB
-#define LED_GPIO_PIN    GPIO_PIN_7
+#define LED_PIN			GPIO_PIN_ENCODE(1, 7)	// port B, pin 7
 
 /* User Button (B1) */
-#define BUTTON_GPIO_PORT GPIOC
-#define BUTTON_GPIO_PIN  GPIO_PIN_13
+#define BUTTON_PIN		GPIO_PIN_ENCODE(2, 13)	// port C, pin 13
