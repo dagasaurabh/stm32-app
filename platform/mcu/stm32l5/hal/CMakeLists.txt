@@ -19,7 +19,7 @@ target_sources(${P}_core INTERFACE $<TARGET_OBJECTS:${P}_core_impl>)
 # [[[cog
 # import cog
 # hal_modules = {
-#     "gpio":    {"srcs": ["gpio"], "deps": []},
+#     "gpio":    {"srcs": ["gpio", "exti"], "deps": []},
 #     "rcc":     {"srcs": ["rcc", "rcc_ex"], "deps": ["pwr"]},
 #     "dma":     {"srcs": ["dma"], "deps": ["rcc"]},
 #     "flash":   {"srcs": ["flash", "flash_ex"], "deps": ["rcc"]},
@@ -62,6 +62,7 @@ target_sources(${P}_core INTERFACE $<TARGET_OBJECTS:${P}_core_impl>)
 # HAL GPIO Library
 set(${P}_GPIO_SRCS)
 list(APPEND ${P}_GPIO_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_gpio.c)
+list(APPEND ${P}_GPIO_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_exti.c)
 add_library(${P}_gpio_impl OBJECT ${${P}_GPIO_SRCS})
 target_link_libraries(${P}_gpio_impl PRIVATE ${MCU_TOOLCHAIN_LIB} ${MCU_HAL_LIB})
 
@@ -134,4 +135,4 @@ add_library(${P}_pwr INTERFACE)
 target_link_libraries(${P}_pwr INTERFACE ${P}_core ${P}_rcc)
 target_sources(${P}_pwr INTERFACE $<TARGET_OBJECTS:${P}_pwr_impl>)
 
-# [[[end]]] (checksum: 3e5cc990c47ef99d13c050c2ee8631aa)
+# [[[end]]] (checksum: ca7c5d175bd33cd7147c9537bc5f7c41)
