@@ -24,6 +24,7 @@ target_sources(${P}_core INTERFACE $<TARGET_OBJECTS:${P}_core_impl>)
 #     "dma":     {"srcs": ["dma"], "deps": ["rcc"]},
 #     "flash":   {"srcs": ["flash", "flash_ex"], "deps": ["rcc"]},
 #     "uart":    {"srcs": ["uart", "uart_ex"], "deps": ["gpio", "rcc", "dma"]},
+#     "spi":     {"srcs": ["spi", "spi_ex"], "deps": ["gpio", "rcc", "dma"]},
 #     "i2c":     {"srcs": ["i2c", "i2c_ex"], "deps": ["gpio", "rcc", "dma"]},
 #     "pwr":     {"srcs": ["pwr", "pwr_ex"], "deps":["rcc"]}
 #  }
@@ -112,6 +113,17 @@ target_link_libraries(${P}_uart_impl PRIVATE ${MCU_TOOLCHAIN_LIB} ${MCU_HAL_LIB}
 add_library(${P}_uart INTERFACE)
 target_link_libraries(${P}_uart INTERFACE ${P}_core ${P}_gpio ${P}_rcc ${P}_dma)
 target_sources(${P}_uart INTERFACE $<TARGET_OBJECTS:${P}_uart_impl>)
+
+# HAL SPI Library
+set(${P}_SPI_SRCS)
+list(APPEND ${P}_SPI_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_spi.c)
+list(APPEND ${P}_SPI_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_spi_ex.c)
+add_library(${P}_spi_impl OBJECT ${${P}_SPI_SRCS})
+target_link_libraries(${P}_spi_impl PRIVATE ${MCU_TOOLCHAIN_LIB} ${MCU_HAL_LIB})
+
+add_library(${P}_spi INTERFACE)
+target_link_libraries(${P}_spi INTERFACE ${P}_core ${P}_gpio ${P}_rcc ${P}_dma)
+target_sources(${P}_spi INTERFACE $<TARGET_OBJECTS:${P}_spi_impl>)
 
 # HAL I2C Library
 set(${P}_I2C_SRCS)
