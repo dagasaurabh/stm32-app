@@ -158,7 +158,6 @@ static const struct gpio_ops  __gpio_ops = {
     .irq_disable  = board_gpio_irq_disable,
 };
 
-void board_led_on(void);
 void board_init(void)
 {
     HAL_Init();
