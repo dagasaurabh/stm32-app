@@ -37,10 +37,25 @@ DEFINE_EXTI_IRQ_HANDLER(15)
 void gpio_hal_init(void * port, uint32_t pin, gpio_hal_mode_t mode, gpio_hal_pull_t pull)
 {
 	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
+	uint32_t gpio_mode;
+
+#define mycase(__in__, __out__) \
+	case GPIO_HAL_MODE_##__in__: \
+	gpio_mode = GPIO_MODE_##__out__; \
+	break;
+
+	switch(mode) {
+		mycase(INPUT, INPUT);
+		mycase(OUTPUT, OUTPUT_PP);
+		mycase(AF, AF_PP);
+		mycase(ANALOG, ANALOG);
+	}
+#undef mycase
+
 	GPIO_InitTypeDef cfg = {
 		.Pin = pin,
 		.Pull = pull,
-		.Mode = mode,
+		.Mode = gpio_mode,
 		.Speed = GPIO_SPEED_FREQ_LOW,
 	};
 
@@ -129,7 +144,7 @@ void gpio_hal_irq_config(void * port,
 	
 	switch(edge)
 	{
-		mycase(RISING, FALLING);
+		mycase(RISING, RISING);
 		mycase(FALLING, FALLING);
 		mycase(BOTH, COMMON);
 	}
