@@ -5,8 +5,8 @@
 #include "board_api.h"
 #include "systime.h"
 
-static bool button_pressed;
-static uint64_t last_press_ms;
+static volatile bool button_pressed;
+static volatile uint64_t last_press_ms;
 
 #define DEBOUNCE_MS 50
 
