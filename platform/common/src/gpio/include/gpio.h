@@ -55,7 +55,7 @@ int gpio_irq_register(gpio_pin_t, gpio_irq_edge_t, gpio_irq_cb_t, void *);
 
 void gpio_irq_enable(gpio_pin_t);
 
-void gpio_irq_diable(gpio_pin_t);
+void gpio_irq_disable(gpio_pin_t);
 
 /*
  * Encoding: [31:16] = port index, [15:0] = pin number
