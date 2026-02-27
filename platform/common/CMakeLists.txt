@@ -16,6 +16,13 @@ set(GPIO_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/gpio/src/gpio.c)
 
 #-------------------------------------------------
 
+#---------------- SPI ----------------------------
+
+set(SPI_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/spi/include)
+set(SPI_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/spi/src/spi.c)
+
+#-------------------------------------------------
+
 #-------- Time Utility Object library ------------
 set(TIME_UTILS_SRCS 
     ${CMAKE_CURRENT_LIST_DIR}/src/time/src/systime.c
@@ -41,12 +48,14 @@ target_link_libraries(${P}_time_utils_obj
 add_library(${P}_obj OBJECT
     ${SERIAL_UART_SRCS}
     ${GPIO_SRCS}
+    ${SPI_SRCS}
 )
 
 target_include_directories(${P}_obj PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${SERIAL_UART_INCLUDE_DIR}
     ${GPIO_INCLUDE_DIR}
+    ${SPI_INCLUDE_DIR}
 )
 
 target_link_libraries(${P}_obj
@@ -60,6 +69,7 @@ target_include_directories(${P} INTERFACE
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${SERIAL_UART_INCLUDE_DIR}
 	${GPIO_INCLUDE_DIR}
+	${SPI_INCLUDE_DIR}
 	${TIME_UTILS_INCLUDE_DIR}
 )
 
