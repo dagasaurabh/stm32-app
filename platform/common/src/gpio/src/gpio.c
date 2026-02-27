@@ -29,7 +29,7 @@ void gpio_write(gpio_pin_t pin, gpio_level_t level)
 
 gpio_level_t gpio_read(gpio_pin_t pin)
 {
-	if(!g_gpio.initialized) return;
+	if(!g_gpio.initialized) return GPIO_LOW;
     if(g_gpio.ops && g_gpio.ops->read) return g_gpio.ops->read(pin);
 
     return GPIO_LOW;
@@ -46,7 +46,7 @@ int gpio_irq_register(gpio_pin_t pin,
         gpio_irq_cb_t cb,
         void *ctx)
 {
-	if(!g_gpio.initialized) return;
+	if(!g_gpio.initialized) return -1;
     if(g_gpio.ops && g_gpio.ops->irq_register) return g_gpio.ops->irq_register(pin, edge, cb, ctx);
     return -1;
 }
