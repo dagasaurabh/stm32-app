@@ -25,7 +25,8 @@ target_sources(${P}_core INTERFACE $<TARGET_OBJECTS:${P}_core_impl>)
 #     "flash":   {"srcs": ["flash", "flash_ex"], "deps": ["rcc"]},
 #     "uart":    {"srcs": ["uart", "uart_ex"], "deps": ["gpio", "rcc", "dma"]},
 #     "i2c":     {"srcs": ["i2c", "i2c_ex"], "deps": ["gpio", "rcc", "dma"]},
-#     "pwr":     {"srcs": ["pwr", "pwr_ex"], "deps":["rcc"]}
+#     "pwr":     {"srcs": ["pwr", "pwr_ex"], "deps":["rcc"]},
+#     "spi":     {"srcs": ["spi", "spi_ex"], "deps": ["gpio", "rcc", "dma"]}
 #  }
 # cog.outl(f"")
 # DEFAULT_DEPS = ["core"]
@@ -135,4 +136,15 @@ add_library(${P}_pwr INTERFACE)
 target_link_libraries(${P}_pwr INTERFACE ${P}_core ${P}_rcc)
 target_sources(${P}_pwr INTERFACE $<TARGET_OBJECTS:${P}_pwr_impl>)
 
-# [[[end]]] (checksum: ca7c5d175bd33cd7147c9537bc5f7c41)
+# HAL SPI Library
+set(${P}_SPI_SRCS)
+list(APPEND ${P}_SPI_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_spi.c)
+list(APPEND ${P}_SPI_SRCS ${HAL_SRC_DIR}/stm32l5xx_hal_spi_ex.c)
+add_library(${P}_spi_impl OBJECT ${${P}_SPI_SRCS})
+target_link_libraries(${P}_spi_impl PRIVATE ${MCU_TOOLCHAIN_LIB} ${MCU_HAL_LIB})
+
+add_library(${P}_spi INTERFACE)
+target_link_libraries(${P}_spi INTERFACE ${P}_core ${P}_gpio ${P}_rcc ${P}_dma)
+target_sources(${P}_spi INTERFACE $<TARGET_OBJECTS:${P}_spi_impl>)
+
+# [[[end]]] (checksum: eb92599dd25f598e1d83b746d962e7b4)
