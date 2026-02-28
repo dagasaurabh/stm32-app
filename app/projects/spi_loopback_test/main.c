@@ -18,7 +18,15 @@
 int main(void)
 {
     board_init();
-    board_spi_init(SPI1_CS_PIN);
+    board_spi_init();
+
+	/*
+	 * Register slaves on a specific bus - bus_name + CS pin per device.
+	 * Multiple slaves on the same bus, or on different buses, are each
+	 * registered with the appropriate bus_name.
+	 */
+
+	board_spi_add_slave("spi1", "spi1.0", SPI1_CS_PIN);
 
 	gpio_init(RED_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
 	gpio_init(GREEN_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
@@ -26,11 +34,12 @@ int main(void)
 	gpio_write(GREEN_LED, GPIO_LOW);
 	gpio_write(RED_LED, GPIO_LOW);
 
-    int fd = spi_open("spi1");
+    int fd = spi_open("spi1.0");
 
 	if(fd < 0) {
-		while(1);
+		while(1) {
 		__asm volatile("nop");
+		}
 	}
 
 	uint8_t out = 'A';
@@ -41,7 +50,7 @@ int main(void)
 
 	while(1) {
 		int rc = spi_transfer(fd, &out, &in, 1);
-		if(rc == 1 && out == in) {
+		if(rc == 0 && out == in) {
 			gpio_write(GREEN_LED, GPIO_HIGH);
 			gpio_write(RED_LED, GPIO_LOW);
 		}
@@ -61,4 +70,7 @@ int main(void)
 	}
 
     spi_close(fd);
+	while(1) {
+		__asm volatile("nop");
+	}
 }
