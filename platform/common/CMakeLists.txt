@@ -56,6 +56,7 @@ target_include_directories(${P}_obj PRIVATE
     ${SERIAL_UART_INCLUDE_DIR}
     ${GPIO_INCLUDE_DIR}
     ${SPI_INCLUDE_DIR}
+    ${MCU_HAL_INCLUDES}
 )
 
 target_link_libraries(${P}_obj

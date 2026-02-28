@@ -5,6 +5,11 @@ add_library(${P}_obj OBJECT
     ${CMAKE_CURRENT_LIST_DIR}/spi_hal.c
 )
 
+target_include_directories(${P}_obj PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_SOURCE_DIR}/platform/common/include  # for spi_types.h
+)
+
 target_link_libraries(${P}_obj
     PRIVATE ${MCU_TOOLCHAIN_LIB}
     PRIVATE ${MCU_HAL_LIB})
@@ -15,7 +20,10 @@ endif()
 
 # Interface library
 add_library(${P} INTERFACE)
-target_include_directories(${P} INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+target_include_directories(${P} INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_SOURCE_DIR}/platform/common/include  # for spi_types.h
+)
 target_link_libraries(${P} INTERFACE hal_spi)
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)
 

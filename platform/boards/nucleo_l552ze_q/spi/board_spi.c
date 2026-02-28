@@ -6,91 +6,64 @@
 
 static SPI_HandleTypeDef hspi1;
 
-typedef struct {
-    spi_t      drv;
-    gpio_pin_t cs_pin;
-} board_spi_ctx_t;
-
-static board_spi_ctx_t spi1_ctx = {
-    .drv = {
-        .hal  = &hspi1,
-        .name = "spi1",
-    },
-};
-
-static int board_spi_open(void *ctx)
-{
-    (void)ctx;
-    return 0;
-}
-
-static int board_spi_close(void *ctx)
-{
-    (void)ctx;
-    return 0;
-}
-
-static int board_spi_write(void *ctx, const uint8_t *buf, uint16_t len)
-{
-    board_spi_ctx_t *c = (board_spi_ctx_t *)ctx;
-
-    gpio_write(c->cs_pin, GPIO_LOW);
-
-    int ret = spi_drv_tx(&c->drv, buf, len);
-
-    gpio_write(c->cs_pin, GPIO_HIGH);
-
-    return ret;
-}
-
-static int board_spi_read(void *ctx, uint8_t *buf, uint16_t len)
-{
-    board_spi_ctx_t *c = (board_spi_ctx_t *)ctx;
-
-    gpio_write(c->cs_pin, GPIO_LOW);
-
-    int ret = spi_drv_rx(&c->drv, buf, len);
-
-    gpio_write(c->cs_pin, GPIO_HIGH);
-
-    return ret;
-}
-
-static int board_spi_transfer(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len)
-{
-    board_spi_ctx_t *c = (board_spi_ctx_t *)ctx;
-
-    gpio_write(c->cs_pin, GPIO_LOW);
-
-    int ret = spi_drv_transfer(&c->drv, tx, rx, len);
-
-    gpio_write(c->cs_pin, GPIO_HIGH);
-
-    return ret;
-}
-
-static const struct spi_bus_ops spi1_ops = {
-    .open     = board_spi_open,
-    .close    = board_spi_close,
-    .write    = board_spi_write,
-    .read     = board_spi_read,
-    .transfer = board_spi_transfer,
-};
-
-static struct spi_device spi1_dev = {
+static spi_t spi1_drv = {
+    .hal  = &hspi1,
     .name = "spi1",
-    .ops  = &spi1_ops,
-    .ctx  = &spi1_ctx,
 };
 
-void board_spi_init(gpio_pin_t cs_pin)
+static int board_spi1_open(void *ctx)
 {
-    spi1_ctx.cs_pin = cs_pin;
+    (void)ctx;
+    return 0;
+}
 
-    /* Drive CS high (idle) before init */
-    gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
-    gpio_write(cs_pin, GPIO_HIGH);
+static int board_spi1_close(void *ctx)
+{
+    (void)ctx;
+    return 0;
+}
 
+static int board_spi1_transfer_one(void *ctx,
+                                    const uint8_t *tx, uint8_t *rx, uint16_t len)
+{
+    return spi_drv_transfer_one((spi_t *)ctx, tx, rx, len);
+}
+
+static int board_spi1_transfer_one_it(void *ctx,
+                                       const uint8_t *tx, uint8_t *rx, uint16_t len,
+                                       spi_cb_t cb, void *cb_ctx)
+{
+    /* spi_cb_t and the driver's callback type share the same definition from spi_types.h */
+    return spi_drv_transfer_one_it((spi_t *)ctx, tx, rx, len, cb, cb_ctx);
+}
+
+static const struct spi_bus_ops spi1_bus_ops = {
+    .open           = board_spi1_open,
+    .close          = board_spi1_close,
+    .transfer_one   = board_spi1_transfer_one,
+    .transfer_one_it = board_spi1_transfer_one_it,
+};
+
+static struct spi_bus spi1_bus = {
+    .name = "spi1",
+    .ops  = &spi1_bus_ops,
+    .ctx  = &spi1_drv,
+};
+
+/* SPI1 IRQ handler — owned here because hspi1 lives here */
+void SPI1_IRQHandler(void)
+{
+    HAL_SPI_IRQHandler(&hspi1);
+}
+
+/* Board-level slave pool (shared across all buses on this board)      */
+
+#define BOARD_SPI_MAX_SLAVES 8
+static struct spi_slave slave_pool[BOARD_SPI_MAX_SLAVES];
+static int slave_count;
+
+void board_spi_init(void)
+{
     /* SPI1: master, CPOL=low, CPHA=1-edge, 8-bit, prescaler=16 */
     hspi1.Instance               = SPI1;
     hspi1.Init.Mode              = SPI_MODE_MASTER;
@@ -105,6 +78,29 @@ void board_spi_init(gpio_pin_t cs_pin)
     hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
     hspi1.Init.CRCPolynomial     = 7;
 
-    spi_drv_init(&spi1_ctx.drv);
-    spi_register(&spi1_dev);
+    spi_drv_init(&spi1_drv);
+    spi_bus_register(&spi1_bus);
+}
+
+/*
+ * board_spi_add_slave — register a slave device on a named bus.
+ *
+ * bus_name : must match a registered spi_bus ("spi1", "spi2", …)
+ * name     : unique slave name, e.g. "spi1.0", "spi1.1"
+ * cs_pin   : GPIO pin used as chip select (active-low, idle-high)
+ */
+int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pin)
+{
+    if (!bus_name || !name || slave_count >= BOARD_SPI_MAX_SLAVES) return -1;
+
+    struct spi_slave *s = &slave_pool[slave_count++];
+    s->name     = name;
+    s->bus_name = bus_name;
+    s->cs_pin   = cs_pin;
+
+    /* Drive CS idle-high before the first transfer */
+    gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
+    gpio_write(cs_pin, GPIO_HIGH);
+
+    return spi_slave_register(s);
 }
