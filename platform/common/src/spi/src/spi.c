@@ -24,6 +24,11 @@
 #include <string.h>
 #include "cmsis_compiler.h"  /* __get_PRIMASK, __set_PRIMASK, __disable_irq */
 #include "cmsis_gcc.h"
+#include "timer.h"
+#include <assert.h>
+
+#define SPI_MAX_BUSES   4
+#define SPI_MAX_SLAVES  8
 
 static struct spi_bus   *bus_table[SPI_MAX_BUSES];
 static struct spi_slave *slave_table[SPI_MAX_SLAVES];
@@ -97,6 +102,41 @@ typedef struct {
 
 static spi_bus_state_t bus_state[SPI_MAX_BUSES];
 
+/*
+ * Save/restore critical section.
+ *
+ */
+static inline uint32_t spi_enter_critical(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+static inline void spi_exit_critical(uint32_t primask)
+{
+    __set_PRIMASK(primask);
+}
+
+static int s_get_bus_idx_by_name(const char * name) {
+    for (int i = 0; i < SPI_MAX_BUSES; i++) {
+        if (bus_table[i] && strcmp(bus_table[i]->name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void s_recover(spi_bus_state_t *st)
+{
+    if (st->needs_recovery) {
+        st->bus->ops->recover(st->bus->ctx,
+                st->recovery_flags);
+        st->needs_recovery = false;
+        st->recovery_flags = 0;
+    }
+}
+
 /* SPI Registration */
 
 int spi_bus_register(struct spi_bus *bus)
@@ -111,7 +151,7 @@ int spi_bus_register(struct spi_bus *bus)
             spi_bus_state_t *st = &bus_state[i];
             memset(st, 0, sizeof(*st));
             st->status = SPI_BUS_IDLE;
-            st->current_mode = 0xFF;;
+            st->current_mode = (spi_mode_t)-1;
             return 0;
         }
     }
@@ -131,12 +171,25 @@ int spi_slave_register(struct spi_slave *slave)
     return -1;
 }
 
+static int s_find_slave(const char *slave_name) {
+    for(int fd = 0; fd < SPI_MAX_SLAVES; fd++) {
+        if(!fd_table[fd]) continue;
+        else if(strcmp(fd_table[fd]->name, slave_name) == 0) {
+            return fd;
+        };
+    }
+    return -1;
+}
+
 int spi_open(const char *slave_name)
 {
     if (!slave_name) return -1;
 
     for (int s = 0; s < SPI_MAX_SLAVES; s++) {
         if (!slave_table[s] || strcmp(slave_table[s]->name, slave_name) != 0) continue;
+
+        int rc = s_find_slave(slave_name);
+        if(rc != -1) return rc;
 
         for (int fd = 0; fd < SPI_MAX_SLAVES; fd++) {
             if (!fd_table[fd]) {
@@ -161,23 +214,26 @@ int spi_close(int fd)
 {
     if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
 
+    uint32_t irq_state = spi_enter_critical();
     struct spi_slave *slave = fd_table[fd];
 
     for (int i = 0; i < SPI_MAX_BUSES; i++) {
-        if (bus_state[i].msg &&
-                bus_state[i].slave == slave) {
+        if (bus_state[i].msg && bus_state[i].slave == slave) {
+            spi_exit_critical(irq_state);
             return -1;  /* active */
         }
 
         for (int q = 0; q < bus_state[i].q_count; q++) {
             int idx = (bus_state[i].q_head + q) % SPI_ASYNC_QUEUE_DEPTH;
             if (fd_table[bus_state[i].queue[idx].fd] == slave) {
+                spi_exit_critical(irq_state);
                 return -1;  /* queued */
             }
         }
     }
 
     fd_table[fd] = NULL;
+    spi_exit_critical(irq_state);
     return 0;
 }
 
@@ -240,14 +296,39 @@ int spi_sync(int fd, struct spi_message *msg)
         return -1;
     }
 
+    mstimer_t timer;
+    mstimer_start(&timer, 5000UL);
+
+    struct spi_slave *slave = fd_table[fd];
+    int bus_idx = s_get_bus_idx_by_name(slave->bus_name);
+    assert(bus_idx >= 0);
+    spi_bus_state_t *st = &bus_state[bus_idx];
+    bool time_out = false;
+
     while (!sync_ctx.done) {
         spi_poll();
+        if(!time_out && mstimer_expired(&timer)) {
+            st->needs_recovery = true;
+            s_recover(st);
+
+            /* ISR won't call spi_async_irq_cb — manually clean up bus state */
+            st->msg     = NULL;
+            st->current = NULL;
+            st->status  = SPI_BUS_IDLE;
+
+            /* Unblock the wait loop */
+            sync_ctx.event = SPI_EVT_ERROR;
+            sync_ctx.done  = 1;
+            time_out = true;
+            gpio_write(st->slave->cs_pin, GPIO_HIGH);
+
+        }
     }
 
     msg->complete = user_cb;
     msg->context  = user_ctx;
 
-    if (sync_ctx.event != SPI_EVT_TXRX_DONE) return -1;
+    if (time_out || sync_ctx.event != SPI_EVT_TXRX_DONE) return -1;
 
     return 0;
 }
@@ -255,22 +336,6 @@ int spi_sync(int fd, struct spi_message *msg)
 /* ------------------------------------------------------------------ */
 /* Async (interrupt-driven) with per-bus message queue                 */
 /* ------------------------------------------------------------------ */
-
-/*
- * Save/restore critical section.
- *
- */
-static inline uint32_t spi_enter_critical(void)
-{
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    return primask;
-}
-
-static inline void spi_exit_critical(uint32_t primask)
-{
-    __set_PRIMASK(primask);
-}
 
 /*
  * spi_start_transfer - assert CS and kick off the first transfer of a message.
@@ -408,25 +473,6 @@ static void s_apply_config(spi_bus_state_t *st)
         st->current_prescaler = st->slave->prescaler;
         st->current_datasize = st->slave->datasize;
     }
-}
-
-static void s_recover(spi_bus_state_t *st)
-{
-    if (st->needs_recovery) {
-        st->bus->ops->recover(st->bus->ctx,
-                st->recovery_flags);
-        st->needs_recovery = false;
-        st->recovery_flags = 0;
-    }
-}
-
-static int s_get_bus_idx_by_name(const char * name) {
-    for (int i = 0; i < SPI_MAX_BUSES; i++) {
-        if (bus_table[i] && strcmp(bus_table[i]->name, name) == 0) {
-            return i;
-        }
-    }
-    return -1;
 }
 
 /*

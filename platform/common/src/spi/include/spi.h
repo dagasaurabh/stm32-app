@@ -4,9 +4,6 @@
 #include "gpio.h"
 #include "spi_types.h"   /* spi_evt_t, SPI_ERR_*, spi_cb_t */
 
-#define SPI_MAX_BUSES   4
-#define SPI_MAX_SLAVES  8
-
 /*
  * spi_transfer — one segment of an SPI message.
  *
