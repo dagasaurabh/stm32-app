@@ -1,4 +1,3 @@
-#include "board.h"
 #include "serial.h"
 #include "uart_driver.h"
 #include "stm32l5xx_hal.h"
@@ -48,11 +47,15 @@ static struct serial_device console_dev = {
 void board_console_init(void)
 {
     hlpuart1.Instance = LPUART1;
-    hlpuart1.Init.BaudRate = 115200;
-    hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
-    hlpuart1.Init.StopBits = UART_STOPBITS_1;
-    hlpuart1.Init.Parity = UART_PARITY_NONE;
-    hlpuart1.Init.Mode = UART_MODE_TX_RX;
+    hlpuart1.Init.BaudRate        = 115200;
+    hlpuart1.Init.WordLength      = UART_WORDLENGTH_8B;
+    hlpuart1.Init.StopBits        = UART_STOPBITS_1;
+    hlpuart1.Init.Parity          = UART_PARITY_NONE;
+    hlpuart1.Init.Mode            = UART_MODE_TX_RX;
+    hlpuart1.Init.HwFlowCtl       = UART_HWCONTROL_NONE;
+    hlpuart1.Init.OverSampling    = UART_OVERSAMPLING_16;
+    hlpuart1.Init.OneBitSampling  = UART_ONE_BIT_SAMPLE_DISABLE;
+    hlpuart1.Init.ClockPrescaler  = UART_PRESCALER_DIV1;
 
     uart_init(&console_uart);
 
