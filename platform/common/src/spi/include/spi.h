@@ -57,6 +57,8 @@ struct spi_bus_ops {
     int (*transfer_one)(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len);
     int (*transfer_one_it)(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len,
                            spi_cb_t cb, void *cb_ctx);
+    int (*apply_config)(void *ctx, spi_mode_t mode, spi_clkdiv_t prescaler, spi_datasize_t datasize);
+    int (*recover)(void *ctx, uint32_t error_flags);
 };
 
 /* A SPI hardware controller */
@@ -76,6 +78,11 @@ struct spi_slave {
     const char *name;
     const char *bus_name;
     gpio_pin_t  cs_pin;
+
+    /* Compile-time configuration */
+    spi_mode_t      mode;        /* SPI_MODE_0..3 */
+    spi_clkdiv_t    prescaler;   /* HAL prescaler value */
+    spi_datasize_t  datasize;    /* 8 or 16 */
 };
 
 /* SPI bus and slave registration called by board layer during init */
@@ -100,3 +107,6 @@ int spi_close(int fd);
 int spi_write(int fd, const uint8_t *buf, uint16_t len);
 int spi_read(int fd, uint8_t *buf, uint16_t len);
 int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len);
+
+/* spi_poll -  needs to be called explicitly when using spi in async mode */
+void spi_poll(void);

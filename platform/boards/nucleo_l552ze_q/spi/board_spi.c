@@ -37,11 +37,99 @@ static int board_spi1_transfer_one_it(void *ctx,
     return spi_drv_transfer_one_it((spi_t *)ctx, tx, rx, len, cb, cb_ctx);
 }
 
+static void map_mode(spi_mode_t mode, uint32_t *polarity, uint32_t *phase)
+{
+    switch (mode) {
+        case SPI_MODE_0:
+            *polarity = SPI_POLARITY_LOW;
+            *phase    = SPI_PHASE_1EDGE;
+            break;
+
+        case SPI_MODE_1:
+            *polarity = SPI_POLARITY_LOW;
+            *phase    = SPI_PHASE_2EDGE;
+            break;
+
+        case SPI_MODE_2:
+            *polarity = SPI_POLARITY_HIGH;
+            *phase    = SPI_PHASE_1EDGE;
+            break;
+
+        case SPI_MODE_3:
+            *polarity = SPI_POLARITY_HIGH;
+            *phase    = SPI_PHASE_2EDGE;
+            break;
+    }
+}
+
+static uint32_t map_clkdiv(spi_clkdiv_t div)
+{
+    switch (div) {
+        case SPI_CLKDIV_2:   return SPI_BAUDRATEPRESCALER_2;
+        case SPI_CLKDIV_4:   return SPI_BAUDRATEPRESCALER_4;
+        case SPI_CLKDIV_8:   return SPI_BAUDRATEPRESCALER_8;
+        case SPI_CLKDIV_16:  return SPI_BAUDRATEPRESCALER_16;
+        case SPI_CLKDIV_32:  return SPI_BAUDRATEPRESCALER_32;
+        case SPI_CLKDIV_64:  return SPI_BAUDRATEPRESCALER_64;
+        case SPI_CLKDIV_128: return SPI_BAUDRATEPRESCALER_128;
+        case SPI_CLKDIV_256: return SPI_BAUDRATEPRESCALER_256;
+    }
+    return SPI_BAUDRATEPRESCALER_8; /* default */
+}
+
+static uint32_t map_datasize(spi_datasize_t ds)
+{
+    switch (ds) {
+        case SPI_DATASIZE_8:  return SPI_DATASIZE_8BIT;
+        case SPI_DATASIZE_16: return SPI_DATASIZE_16BIT;
+    }
+    return SPI_DATASIZE_8BIT;
+}
+
+static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkdiv,
+        spi_datasize_t datasize)
+{
+    spi_t * spi_drv = (spi_t *)ctx;
+
+    SPI_HandleTypeDef *hspi = spi_drv->hal;
+
+    uint32_t polarity, phase;
+    map_mode(mode, &polarity, &phase);
+
+    spi_drv_deinit((spi_t *)ctx);
+
+    hspi->Init.CLKPolarity = polarity;
+    hspi->Init.CLKPhase    = phase;
+    hspi->Init.BaudRatePrescaler = map_clkdiv(clkdiv);
+    hspi->Init.DataSize = map_datasize(datasize);
+
+    return spi_drv_init((spi_t *)ctx);
+
+}
+
+static int board_spi1_recover(void *ctx, uint32_t error_flags)
+{
+    spi_t * spi_drv = (spi_t *)ctx;
+
+    SPI_HandleTypeDef *hspi = spi_drv->hal;
+
+    /* Abort ongoing transfer */
+    HAL_SPI_Abort(hspi);
+
+    /* Fully reset peripheral */
+    spi_drv_deinit(&spi1_drv);
+    spi_drv_init(&spi1_drv);
+
+    return 0;
+}
+
 static const struct spi_bus_ops spi1_bus_ops = {
     .open           = board_spi1_open,
     .close          = board_spi1_close,
     .transfer_one   = board_spi1_transfer_one,
     .transfer_one_it = board_spi1_transfer_one_it,
+    .apply_config   = board_spi1_apply_config,
+    .recover = board_spi1_recover,
 };
 
 static struct spi_bus spi1_bus = {
@@ -88,8 +176,12 @@ void board_spi_init(void)
  * bus_name : must match a registered spi_bus ("spi1", "spi2", …)
  * name     : unique slave name, e.g. "spi1.0", "spi1.1"
  * cs_pin   : GPIO pin used as chip select (active-low, idle-high)
+ * mode     : spi mode
+ * prescaler: clock prescaler
+ * datasize : data size
  */
-int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pin)
+int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pin,
+        spi_mode_t mode, spi_clkdiv_t prescaler, spi_datasize_t datasize)
 {
     if (!bus_name || !name || slave_count >= BOARD_SPI_MAX_SLAVES) return -1;
 
@@ -97,6 +189,9 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
     s->name     = name;
     s->bus_name = bus_name;
     s->cs_pin   = cs_pin;
+    s->mode     = mode;
+    s->prescaler = prescaler;
+    s->datasize = datasize;
 
     /* Drive CS idle-high before the first transfer */
     gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);

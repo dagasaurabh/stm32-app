@@ -1,13 +1,101 @@
+/*
+ * spi.c — Facade layer of SPI subsystem.
+ *
+ * Responsibilities:
+ *   - Maintains bus and slave registries
+ *   - Provides fd-based application API
+ *   - Implements message sequencing (sync + async)
+ *   - Manages CS assertion/deassertion
+ *   - Owns per-bus async state machine and queue
+ *
+ * Does NOT:
+ *   - Touch hardware registers directly
+ *   - Perform blocking HAL operations
+ */
+
+/*
+ * NOTE:
+ * Chip-select (CS) handling is fully owned by this facade layer.
+ * Bus ops (transfer_one_it) must NOT manipulate CS.
+ */
+
 #include "spi.h"
 #include "gpio.h"
 #include <string.h>
 #include "cmsis_compiler.h"  /* __get_PRIMASK, __set_PRIMASK, __disable_irq */
-//#include "cmsis_compiler.h"
 #include "cmsis_gcc.h"
 
 static struct spi_bus   *bus_table[SPI_MAX_BUSES];
 static struct spi_slave *slave_table[SPI_MAX_SLAVES];
+
+/*
+ * fd_table maps small integer file descriptors to registered spi_slave objects.
+ * Entries are set by spi_open() and cleared by spi_close().
+ * spi_close() fails if the slave has an active or queued async transfer.
+ */
+
 static struct spi_slave *fd_table[SPI_MAX_SLAVES];
+
+static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags);
+
+struct spi_sync_ctx {
+    volatile int      done;
+    volatile spi_evt_t event;
+    volatile uint32_t error_flags;
+};
+
+/* Per-bus pending queue entry */
+typedef struct {
+    int                fd;
+    struct spi_message *msg;
+} spi_queued_t;
+
+#define SPI_ASYNC_QUEUE_DEPTH 4
+
+/*
+ * Per-bus async runtime state.
+ *
+ * Each physical SPI controller has exactly one instance of this struct.
+ * It tracks:
+ *   - Currently active message and transfer segment
+ *   - Accumulated error flags across segments
+ *   - Slave whose CS is currently asserted
+ *   - Ring buffer of queued messages waiting for this bus
+ *
+ * st->msg == NULL means the bus is idle.
+ */
+
+typedef enum {
+    SPI_BUS_IDLE = 0,
+    SPI_BUS_ACTIVE
+} spi_bus_status_t;
+
+typedef struct {
+    spi_bus_status_t status;
+
+    /* Active transfer */
+    struct spi_slave    *slave;
+    struct spi_bus      *bus;
+    struct spi_message  *msg;          /* NULL = idle */
+    struct spi_transfer *current;
+    uint32_t             error_flags;  /* accumulated SPI_ERR_* bits, 0 = ok */
+
+    /* Pending message queue (ring buffer) */
+    spi_queued_t         queue[SPI_ASYNC_QUEUE_DEPTH];
+    uint8_t              q_head;
+    uint8_t              q_tail;
+    uint8_t              q_count;
+
+    /* Active configuration cache */
+    spi_mode_t      current_mode;
+    spi_clkdiv_t    current_prescaler;
+    spi_datasize_t  current_datasize;
+
+    volatile bool needs_recovery;
+    volatile uint32_t recovery_flags;
+} spi_bus_state_t;
+
+static spi_bus_state_t bus_state[SPI_MAX_BUSES];
 
 /* SPI Registration */
 
@@ -19,6 +107,11 @@ int spi_bus_register(struct spi_bus *bus)
         if (!bus_table[i]) {
             bus_table[i] = bus;
             if (bus->ops->open) bus->ops->open(bus->ctx);
+
+            spi_bus_state_t *st = &bus_state[i];
+            memset(st, 0, sizeof(*st));
+            st->status = SPI_BUS_IDLE;
+            st->current_mode = 0xFF;;
             return 0;
         }
     }
@@ -38,7 +131,6 @@ int spi_slave_register(struct spi_slave *slave)
     return -1;
 }
 
-
 int spi_open(const char *slave_name)
 {
     if (!slave_name) return -1;
@@ -57,9 +149,34 @@ int spi_open(const char *slave_name)
     return -1; /* slave not registered */
 }
 
+/*
+ * spi_close fails if:
+ *   - The slave currently has an active async transfer
+ *   - The slave is present in any bus queue
+ *
+ * This prevents lifetime races between ISR and application.
+ */
+
 int spi_close(int fd)
 {
     if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
+
+    struct spi_slave *slave = fd_table[fd];
+
+    for (int i = 0; i < SPI_MAX_BUSES; i++) {
+        if (bus_state[i].msg &&
+                bus_state[i].slave == slave) {
+            return -1;  /* active */
+        }
+
+        for (int q = 0; q < bus_state[i].q_count; q++) {
+            int idx = (bus_state[i].q_head + q) % SPI_ASYNC_QUEUE_DEPTH;
+            if (fd_table[bus_state[i].queue[idx].fd] == slave) {
+                return -1;  /* queued */
+            }
+        }
+    }
+
     fd_table[fd] = NULL;
     return 0;
 }
@@ -87,44 +204,52 @@ void spi_message_add_transfer(struct spi_message *msg, struct spi_transfer *xfer
     }
 }
 
+static void spi_sync_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
+{
+    struct spi_sync_ctx *s = ctx;
+
+    s->event       = event;
+    s->error_flags = error_flags;
+    s->done        = 1;
+}
+
 /*
- * spi_sync — execute a message atomically.
+ * spi_sync — synchronous wrapper around spi_async().
  *
- * CS is asserted before the first transfer.  Between transfers,
- * cs_change=1 causes a brief de assert/re assert.
- * CS is always de asserted at the end of the message.
+ * Submits the message to the async engine and blocks (busy-wait)
+ * until the message completion callback fires.
+ *
+ * Must not be called from ISR context.
  */
+
 int spi_sync(int fd, struct spi_message *msg)
 {
-    if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
-    if (!msg || !msg->transfers) return -1;
+    if (__get_IPSR() != 0) return -1;
 
-    struct spi_slave *slave = fd_table[fd];
+    struct spi_sync_ctx sync_ctx = {0};
 
-    struct spi_bus *bus = NULL;
-    for (int i = 0; i < SPI_MAX_BUSES; i++) {
-        if (bus_table[i] && strcmp(bus_table[i]->name, slave->bus_name) == 0) {
-            bus = bus_table[i];
-            break;
-        }
-    }
-    if (!bus || !bus->ops->transfer_one) return -1;
+    spi_cb_t user_cb = msg->complete;
+    void *user_ctx   = msg->context;
 
-    gpio_write(slave->cs_pin, GPIO_LOW);
+    msg->complete = spi_sync_cb;
+    msg->context  = &sync_ctx;
 
-    int ret = 0;
-    for (struct spi_transfer *xfer = msg->transfers; xfer; xfer = xfer->next) {
-        ret = bus->ops->transfer_one(bus->ctx, xfer->tx_buf, xfer->rx_buf, xfer->len);
-        if (ret) break;
-
-        if (xfer->cs_change && xfer->next) {
-            gpio_write(slave->cs_pin, GPIO_HIGH);
-            gpio_write(slave->cs_pin, GPIO_LOW);
-        }
+    if (spi_async(fd, msg) < 0) {
+        msg->complete = user_cb;
+        msg->context  = user_ctx;
+        return -1;
     }
 
-    gpio_write(slave->cs_pin, GPIO_HIGH);
-    return ret;
+    while (!sync_ctx.done) {
+        spi_poll();
+    }
+
+    msg->complete = user_cb;
+    msg->context  = user_ctx;
+
+    if (sync_ctx.event != SPI_EVT_TXRX_DONE) return -1;
+
+    return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -147,42 +272,19 @@ static inline void spi_exit_critical(uint32_t primask)
     __set_PRIMASK(primask);
 }
 
-/* Per-bus pending queue entry */
-typedef struct {
-    int                fd;
-    struct spi_message *msg;
-} spi_queued_t;
-
-#define SPI_ASYNC_QUEUE_DEPTH 4
-
-/* Per-bus async state */
-typedef struct {
-    /* Active transfer */
-    int                  fd;
-    struct spi_bus      *bus;
-    struct spi_message  *msg;          /* NULL = idle */
-    struct spi_transfer *current;
-    uint32_t             error_flags;  /* accumulated SPI_ERR_* bits, 0 = ok */
-
-    /* Pending message queue (ring buffer) */
-    spi_queued_t         queue[SPI_ASYNC_QUEUE_DEPTH];
-    uint8_t              q_head;
-    uint8_t              q_tail;
-    uint8_t              q_count;
-} spi_bus_state_t;
-
-static spi_bus_state_t bus_state[SPI_MAX_BUSES];
-
-static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags);
-
 /*
  * spi_start_transfer - assert CS and kick off the first transfer of a message.
  * Called from both spi_async() (task context) and spi_async_irq_cb() (ISR context).
- * Caller must have already filled st->{fd, bus, msg, current, status}.
+ * Caller must have already filled:
+ *   - st->slave
+ *   - st->bus
+ *   - st->msg
+ *   - st->current
+ *   - st->error_flags
  */
 static void spi_start_transfer(spi_bus_state_t *st)
 {
-    struct spi_slave *slave = fd_table[st->fd];
+    struct spi_slave *slave = st->slave;
     gpio_write(slave->cs_pin, GPIO_LOW);
     st->bus->ops->transfer_one_it(st->bus->ctx,
                                    st->current->tx_buf, st->current->rx_buf,
@@ -205,9 +307,20 @@ static void spi_start_transfer(spi_bus_state_t *st)
 static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
 {
     spi_bus_state_t *st    = (spi_bus_state_t *)ctx;
-    struct spi_slave *slave = fd_table[st->fd];
+    struct spi_slave *slave = st->slave;
 
-    if (event == SPI_EVT_ERROR) st->error_flags |= error_flags;
+    if (event == SPI_EVT_ERROR) {
+        st->error_flags |= error_flags;
+
+        /* Mark fatal errors */
+        if (error_flags & (SPI_ERR_MODF |
+                    SPI_ERR_OVR  |
+                    SPI_ERR_DMA)) {
+
+            st->needs_recovery = true;
+            st->recovery_flags = error_flags;
+        }
+    }
 
     /* cs_change between two segments of the same message */
     if (event != SPI_EVT_ERROR && st->current->cs_change && st->current->next) {
@@ -218,11 +331,11 @@ static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
     st->current = st->current->next;
 
     if (st->current && st->error_flags == 0) {
-        /* More transfers remain in this message — continue */
+        /* More transfers remain in this message - continue */
         st->bus->ops->transfer_one_it(st->bus->ctx,
-                                       st->current->tx_buf, st->current->rx_buf,
-                                       st->current->len,
-                                       spi_async_irq_cb, st);
+                st->current->tx_buf, st->current->rx_buf,
+                st->current->len,
+                spi_async_irq_cb, st);
         return;
     }
 
@@ -244,23 +357,76 @@ static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
      *   (b) the next message starts as soon as possible.
      */
     if (st->q_count > 0) {
+
         spi_queued_t next = st->queue[st->q_head];
-        st->q_head  = (uint8_t)((st->q_head + 1) % SPI_ASYNC_QUEUE_DEPTH);
-        st->q_count--;
+        struct spi_slave *next_slave = fd_table[next.fd];
 
-        st->fd          = next.fd;
-        /* st->bus stays the same — all queued msgs are for this bus */
-        st->msg         = next.msg;
-        st->current     = next.msg->transfers;
-        st->error_flags = 0;
+        bool config_change =
+            (st->current_mode != next_slave->mode) ||
+            (st->current_prescaler != next_slave->prescaler) ||
+            (st->current_datasize != next_slave->datasize);
 
-        spi_start_transfer(st);
-    } else {
-        st->msg = NULL; /* bus is now idle */
+        if (st->needs_recovery || config_change) {
+            /* DO NOT touch queue */
+            /* let spi_poll() handle everything */
+            /* do not return from here. Need to invoke user cb */
+
+            st->msg = NULL;
+            st->current = NULL;
+            st->status = SPI_BUS_IDLE;
+        }
+        else {
+            /* No heavy work needed -> safe to continue in ISR */
+            st->q_head = (st->q_head + 1) % SPI_ASYNC_QUEUE_DEPTH;
+            st->q_count--;
+
+            st->slave = next_slave;
+            st->msg   = next.msg;
+            st->current = next.msg->transfers;
+            st->error_flags = 0;
+
+            spi_start_transfer(st);
+        }
+    }
+    else {
+        st->msg = NULL;
+        st->status = SPI_BUS_IDLE;
     }
 
     /* Trigger user callback for the just-completed message */
     if (complete) complete(context, final_evt, final_err);
+}
+
+static void s_apply_config(spi_bus_state_t *st)
+{
+    if (st->bus->ops->apply_config) {
+
+        st->bus->ops->apply_config(st->bus->ctx,
+                st->slave->mode, st->slave->prescaler, st->slave->datasize);
+
+        st->current_mode = st->slave->mode;
+        st->current_prescaler = st->slave->prescaler;
+        st->current_datasize = st->slave->datasize;
+    }
+}
+
+static void s_recover(spi_bus_state_t *st)
+{
+    if (st->needs_recovery) {
+        st->bus->ops->recover(st->bus->ctx,
+                st->recovery_flags);
+        st->needs_recovery = false;
+        st->recovery_flags = 0;
+    }
+}
+
+static int s_get_bus_idx_by_name(const char * name) {
+    for (int i = 0; i < SPI_MAX_BUSES; i++) {
+        if (bus_table[i] && strcmp(bus_table[i]->name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 /*
@@ -276,23 +442,24 @@ static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
  *
  * msg->complete must be non-NULL (async without a callback makes no sense).
  * The caller must not modify the message or its buffers until the callback fires.
+ * This function must be called from thread context (not ISR).
+ * Not re-entrant. Designed for single-threaded bare-metal use.
  */
 int spi_async(int fd, struct spi_message *msg)
 {
+    /* Can not be called from ISR context */
+    if (__get_IPSR() != 0) return -1;
+
     if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
     if (!msg || !msg->transfers || !msg->complete) return -1;
 
     struct spi_slave *slave = fd_table[fd];
 
-    struct spi_bus *bus = NULL;
-    int bus_idx = -1;
-    for (int i = 0; i < SPI_MAX_BUSES; i++) {
-        if (bus_table[i] && strcmp(bus_table[i]->name, slave->bus_name) == 0) {
-            bus     = bus_table[i];
-            bus_idx = i;
-            break;
-        }
-    }
+    int bus_idx = s_get_bus_idx_by_name(slave->bus_name);
+    if(bus_idx < 0) return -1;
+
+    struct spi_bus *bus = bus_table[bus_idx]; 
+
     if (!bus || !bus->ops->transfer_one_it) return -1;
 
     spi_bus_state_t *st = &bus_state[bus_idx];
@@ -302,19 +469,24 @@ int spi_async(int fd, struct spi_message *msg)
      * GPIO and HAL IT calls (which can be slow or block briefly) are
      * outside the critical section.
      */
-    uint32_t irq_state = spi_enter_critical();
 
-    if (st->msg == NULL) {
-        /* Bus idle — set up state and mark busy before exiting critical */
-        st->fd          = fd;
+    uint32_t irq_state = spi_enter_critical();
+    if(st->status == SPI_BUS_IDLE && st->q_count == 0) {
+
+        /* Bus idle - set up state and mark busy before exiting critical */
+        st->status      = SPI_BUS_ACTIVE;
+        st->slave       = slave;
         st->bus         = bus;
         st->msg         = msg;
         st->current     = msg->transfers;
         st->error_flags = 0;
         spi_exit_critical(irq_state);
 
+        s_recover(st);
+        s_apply_config(st);
         spi_start_transfer(st);
-    } else {
+    }
+    else {
         /* Bus busy - enqueue */
         if (st->q_count >= SPI_ASYNC_QUEUE_DEPTH) {
             spi_exit_critical(irq_state);
@@ -326,7 +498,6 @@ int spi_async(int fd, struct spi_message *msg)
         st->q_count++;
         spi_exit_critical(irq_state);
     }
-
     return 0;
 }
 
@@ -359,4 +530,50 @@ int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len)
     spi_message_init(&msg);
     spi_message_add_transfer(&msg, &xfer);
     return spi_sync(fd, &msg);
+}
+
+void spi_poll(void)
+{
+    for (int i = 0; i < SPI_MAX_BUSES; i++) {
+
+        spi_bus_state_t *st = &bus_state[i];
+
+        if (st->status != SPI_BUS_IDLE) continue;
+
+        if (!st->needs_recovery && st->q_count == 0) continue;
+
+        uint32_t irq_state = spi_enter_critical();
+
+        if (st->status != SPI_BUS_IDLE) {
+            spi_exit_critical(irq_state);
+            continue;
+        }
+
+        if (st->needs_recovery) {
+            s_recover(st);
+            spi_exit_critical(irq_state);
+            continue;
+        }
+
+        if (st->q_count > 0) {
+
+            spi_queued_t next = st->queue[st->q_head];
+            st->q_head = (st->q_head + 1) % SPI_ASYNC_QUEUE_DEPTH;
+            st->q_count--;
+
+            st->slave = fd_table[next.fd];
+            st->msg   = next.msg;
+            st->current = next.msg->transfers;
+            st->error_flags = 0;
+            st->status = SPI_BUS_ACTIVE;
+
+            spi_exit_critical(irq_state);
+
+            s_apply_config(st);
+            spi_start_transfer(st);
+        }
+        else {
+            spi_exit_critical(irq_state);
+        }
+    }
 }
