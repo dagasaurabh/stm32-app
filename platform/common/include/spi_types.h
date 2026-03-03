@@ -50,3 +50,26 @@ typedef enum {
  * Always invoked from ISR context — implementation must be ISR-safe.
  */
 typedef void (*spi_cb_t)(void *ctx, spi_evt_t event, uint32_t error_flags);
+
+typedef enum {
+    SPI_MODE_0 = 0,  /* CPOL=0, CPHA=0 */
+    SPI_MODE_1,      /* CPOL=0, CPHA=1 */
+    SPI_MODE_2,      /* CPOL=1, CPHA=0 */
+    SPI_MODE_3       /* CPOL=1, CPHA=1 */
+} spi_mode_t;
+
+typedef enum {
+    SPI_DATASIZE_8  = 8,
+    SPI_DATASIZE_16 = 16
+} spi_datasize_t;
+
+typedef enum {
+    SPI_CLKDIV_2,
+    SPI_CLKDIV_4,
+    SPI_CLKDIV_8,
+    SPI_CLKDIV_16,
+    SPI_CLKDIV_32,
+    SPI_CLKDIV_64,
+    SPI_CLKDIV_128,
+    SPI_CLKDIV_256
+} spi_clkdiv_t;
