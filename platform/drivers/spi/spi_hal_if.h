@@ -4,6 +4,7 @@
 #include "spi_types.h"  /* spi_evt_t, SPI_ERR_*, spi_cb_t */
 
 int spi_hal_init(void *hal);
+int spi_hal_deinit(void *hal);
 
 /* Blocking - returns when transfer is complete */
 int spi_hal_tx(void *hal, const uint8_t *buf, uint16_t len);

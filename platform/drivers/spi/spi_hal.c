@@ -49,6 +49,11 @@ int spi_hal_init(void *hal)
     return HAL_SPI_Init((SPI_HandleTypeDef *)hal);
 }
 
+int spi_hal_deinit(void *hal)
+{
+    return HAL_SPI_DeInit((SPI_HandleTypeDef *)hal);
+}
+
 int spi_hal_tx(void *hal, const uint8_t *buf, uint16_t len)
 {
     return HAL_SPI_Transmit(

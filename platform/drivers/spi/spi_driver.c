@@ -7,6 +7,12 @@ int spi_drv_init(spi_t *dev)
     return spi_hal_init(dev->hal);
 }
 
+int spi_drv_deinit(spi_t *dev)
+{
+    if (!dev || !dev->hal) return -1;
+    return spi_hal_deinit(dev->hal);
+}
+
 int spi_drv_transfer_one(spi_t *dev, const uint8_t *tx, uint8_t *rx, uint16_t len)
 {
     if (!dev || !dev->hal || len == 0) return -1;

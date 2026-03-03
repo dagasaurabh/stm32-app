@@ -10,6 +10,8 @@ typedef struct {
 
 int spi_drv_init(spi_t *dev);
 
+int spi_drv_deinit(spi_t *dev);
+
 /*
  * spi_drv_transfer_one — blocking raw segment.
  *
