@@ -46,8 +46,8 @@ static void on_transfer_done(void *ctx, spi_evt_t event, uint32_t error_flags)
 static void s_init_msg(struct Env * env) {
     env->async_xfer = (struct spi_transfer){
         .tx_buf = &env->out,
-        .rx_buf = &env->in,
-        .len    = 1,
+            .rx_buf = &env->in,
+            .len    = 1,
     };
 
     spi_message_init(&env->async_msg);
@@ -110,8 +110,6 @@ int main(void)
             s_init_msg(&env);
             spi_async(fd, &env.async_msg);
         }
-        gpio_write(GREEN_LED, GPIO_LOW);
-        gpio_write(RED_LED, GPIO_LOW);
         spi_poll();
     }
 
