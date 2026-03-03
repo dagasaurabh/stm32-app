@@ -39,6 +39,7 @@ static int board_spi1_transfer_one_it(void *ctx,
 
 static void map_mode(spi_mode_t mode, uint32_t *polarity, uint32_t *phase)
 {
+
     switch (mode) {
         case SPI_MODE_0:
             *polarity = SPI_POLARITY_LOW;
@@ -83,7 +84,7 @@ static uint32_t map_datasize(spi_datasize_t ds)
         case SPI_DATASIZE_8:  return SPI_DATASIZE_8BIT;
         case SPI_DATASIZE_16: return SPI_DATASIZE_16BIT;
     }
-    return SPI_DATASIZE_8BIT;
+    return SPI_DATASIZE_8BIT; /* default */
 }
 
 static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkdiv,
@@ -93,18 +94,30 @@ static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkd
 
     SPI_HandleTypeDef *hspi = spi_drv->hal;
 
-    uint32_t polarity, phase;
+    uint32_t polarity = SPI_POLARITY_LOW;
+    uint32_t phase = SPI_PHASE_1EDGE;
+    uint32_t prescaler = SPI_BAUDRATEPRESCALER_16;
+    uint32_t datawidth = SPI_DATASIZE_8BIT;
+
     map_mode(mode, &polarity, &phase);
+    prescaler = map_clkdiv(clkdiv);
+    datawidth = map_datasize(datasize);
 
-    spi_drv_deinit((spi_t *)ctx);
+    if(polarity != hspi->Init.CLKPolarity ||
+            phase != hspi->Init.CLKPhase ||
+            prescaler != hspi->Init.BaudRatePrescaler ||
+            datasize != hspi->Init.DataSize) {
 
-    hspi->Init.CLKPolarity = polarity;
-    hspi->Init.CLKPhase    = phase;
-    hspi->Init.BaudRatePrescaler = map_clkdiv(clkdiv);
-    hspi->Init.DataSize = map_datasize(datasize);
+        spi_drv_deinit((spi_t *)ctx);
 
-    return spi_drv_init((spi_t *)ctx);
+        hspi->Init.CLKPolarity = polarity;
+        hspi->Init.CLKPhase    = phase;
+        hspi->Init.BaudRatePrescaler = prescaler;
+        hspi->Init.DataSize = datawidth;
 
+        return spi_drv_init((spi_t *)ctx);
+    }
+    return 0;
 }
 
 static int board_spi1_recover(void *ctx, uint32_t error_flags)
@@ -117,8 +130,8 @@ static int board_spi1_recover(void *ctx, uint32_t error_flags)
     HAL_SPI_Abort(hspi);
 
     /* Fully reset peripheral */
-    spi_drv_deinit(&spi1_drv);
-    spi_drv_init(&spi1_drv);
+    spi_drv_deinit((spi_t *)ctx);
+    spi_drv_init((spi_t *)ctx);
 
     return 0;
 }
@@ -173,8 +186,10 @@ void board_spi_init(void)
 /*
  * board_spi_add_slave — register a slave device on a named bus.
  *
- * bus_name : must match a registered spi_bus ("spi1", "spi2", …)
- * name     : unique slave name, e.g. "spi1.0", "spi1.1"
+ * bus_name : must match a registered spi_bus ("spi1", "spi2", …),bus_name should be
+ * available through out the program.
+ * name     : unique slave name, e.g. "spi1.0", "spi1.1". name should be
+ * available through out the program.
  * cs_pin   : GPIO pin used as chip select (active-low, idle-high)
  * mode     : spi mode
  * prescaler: clock prescaler

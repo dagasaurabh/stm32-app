@@ -16,12 +16,6 @@ set(GPIO_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/gpio/src/gpio.c)
 
 #-------------------------------------------------
 
-#---------------- SPI ----------------------------
-
-set(SPI_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/spi/include)
-set(SPI_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/spi/src/spi.c)
-
-#-------------------------------------------------
 
 #-------- Time Utility Object library ------------
 set(TIME_UTILS_SRCS 
@@ -30,6 +24,13 @@ set(TIME_UTILS_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/src/time/src/timer.c
 )
 set(TIME_UTILS_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/time/include)
+#-------------------------------------------------
+
+#---------------- SPI ----------------------------
+
+set(SPI_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/spi/include ${TIME_UTILS_INCLUDE_DIR})
+set(SPI_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/spi/src/spi.c)
+
 #-------------------------------------------------
 
 #----- Object library ----------------------------
