@@ -82,6 +82,10 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     if (huart->Instance == LPUART1) {
+        /* GPIOG is on the VDDIO2 power domain — must be enabled before the
+         * GPIO clock, otherwise PG7/PG8 remain unpowered and LPUART1
+         * silently produces no output even though HAL_UART_Init succeeds. */
+        HAL_PWREx_EnableVddIO2();
         __HAL_RCC_LPUART1_CLK_ENABLE();
         __HAL_RCC_GPIOG_CLK_ENABLE();
 

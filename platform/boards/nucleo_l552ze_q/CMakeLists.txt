@@ -23,7 +23,7 @@ target_compile_definitions(${P} INTERFACE
     BOARD_HAS_BUTTON
     BOARD_HAS_CONSOLE
 )
-
+target_link_libraries(${P} INTERFACE hal_pwr)
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)
 
 

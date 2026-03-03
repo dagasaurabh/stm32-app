@@ -14,7 +14,7 @@ int serial_register(struct serial_device *dev, serial_role_t role)
 {
     int fd;
 
-    if (!dev || !dev->ops->write || !dev->ops->read) return -1;
+    if (!dev || !dev->ops || !dev->ops->write || !dev->ops->read) return -1;
 
     if (role == SERIAL_ROLE_STDIO && stdio_fd == -1) {
         fd = 1; /* stdout */
