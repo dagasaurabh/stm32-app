@@ -67,7 +67,7 @@ int main(void)
      * registered with the appropriate bus_name.
      */
 
-    board_spi_add_slave("spi1", "spi1.0", SPI1_CS_PIN);
+    board_spi_add_slave("spi1", "spi1.0", SPI1_CS_PIN, SPI_MODE_0, SPI_CLKDIV_16, SPI_DATASIZE_8);
 
     gpio_init(RED_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
     gpio_init(GREEN_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
@@ -112,6 +112,7 @@ int main(void)
         }
         gpio_write(GREEN_LED, GPIO_LOW);
         gpio_write(RED_LED, GPIO_LOW);
+        spi_poll();
     }
 
     spi_close(fd);
