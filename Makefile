@@ -1,7 +1,7 @@
 T := $(realpath $(dir $(filter %Makefile,$(MAKEFILE_LIST))))
 
 # List of supported boards
-SUPPORTED_BOARDS := nucleo_l552ze_q
+SUPPORTED_BOARDS := nucleo_l552ze_q b_u585i_iot02a
 
 # Default board
 BOARD ?= nucleo_l552ze_q
@@ -86,6 +86,7 @@ help:
 	@echo ""
 	@echo "Boards:"
 	@echo "  BOARD=nucleo_l552ze_q    Nucleo L552ZE-Q (default)"
+	@echo "  BOARD=b_u585i_iot02a     B-U585I-IOT02A Discovery Kit"
 	@echo ""
 	@echo "Build Types:"
 	@echo "  TYPE=Debug               Debug build with symbols (default)"
@@ -105,4 +106,5 @@ help:
 	@echo "  make                                    	# Build for default board (nucleo_l552ze_q)"
 	@echo "  make BOARD=nucleo_l552ze_q TYPE=Debug		# Build for Nucleo L552ZE-Q"
 	@echo "  make BOARD=nucleo_l552ze_q TYPE=Release  	# Release build for nucleo_l552ze_q"
+	@echo "  make BOARD=b_u585i_iot02a TYPE=Debug    	# Build for B-U585I-IOT02A"
 	@echo "  make build-all                          	# Build for all boards"
