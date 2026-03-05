@@ -1,4 +1,4 @@
-#include "gpio_hal_if.h"  
+#include "gpio_hal_if.h"
 #if defined(STM32L552xx)
  #include "stm32l5xx_hal.h"
 #elif defined(STM32U585xx)
@@ -40,7 +40,10 @@ DEFINE_EXTI_IRQ_HANDLER(13)
 DEFINE_EXTI_IRQ_HANDLER(14)
 DEFINE_EXTI_IRQ_HANDLER(15)
 
-void gpio_hal_init(void * port, uint32_t pin, gpio_hal_mode_t mode, gpio_hal_pull_t pull)
+void gpio_hal_init(void *port, uint32_t pin,
+		gpio_hal_mode_t mode,
+		gpio_pull_t pull,
+		gpio_hal_speed_t speed)
 {
 	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
 	uint32_t gpio_mode;
@@ -51,42 +54,59 @@ void gpio_hal_init(void * port, uint32_t pin, gpio_hal_mode_t mode, gpio_hal_pul
 	break;
 
 	switch(mode) {
-		mycase(INPUT, INPUT);
-		mycase(OUTPUT, OUTPUT_PP);
-		mycase(AF, AF_PP);
-		mycase(ANALOG, ANALOG);
+		mycase(INPUT,     INPUT);
+		mycase(OUTPUT,    OUTPUT_PP);
+		mycase(OUTPUT_OD, OUTPUT_OD);
+		mycase(AF,        AF_PP);
+		mycase(AF_OD,     AF_OD);
+		mycase(ANALOG,    ANALOG);
+	}
+#undef mycase
+
+	uint32_t gpio_speed;
+
+#define mycase(__in__, __out__) \
+	case GPIO_HAL_SPEED_##__in__: \
+	gpio_speed = GPIO_SPEED_FREQ_##__out__; \
+	break;
+
+	switch(speed) {
+		mycase(LOW,       LOW);
+		mycase(MEDIUM,    MEDIUM);
+		mycase(HIGH,      HIGH);
+		mycase(VERY_HIGH, VERY_HIGH);
 	}
 #undef mycase
 
 	GPIO_InitTypeDef cfg = {
-		.Pin = pin,
-		.Pull = pull,
-		.Mode = gpio_mode,
-		.Speed = GPIO_SPEED_FREQ_LOW,
+		.Pin   = pin,
+		.Pull  = pull,
+		.Mode  = gpio_mode,
+		.Speed = gpio_speed,
 	};
 
 	HAL_GPIO_Init(__port, &cfg);
 }
 
-void gpio_hal_write(void * port, uint32_t pin, uint8_t level)
+void gpio_hal_write(void *port, uint32_t pin, uint8_t level)
 {
-	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
+    GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
 
-	HAL_GPIO_WritePin(__port, pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(__port, pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 uint8_t gpio_hal_read(void *port, uint32_t pin)
 {
-	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
+    GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
 
-	return HAL_GPIO_ReadPin(__port, pin) == GPIO_PIN_SET;
+    return HAL_GPIO_ReadPin(__port, pin) == GPIO_PIN_SET;
 }
 
-void gpio_hal_toggle(void * port, uint32_t pin)
+void gpio_hal_toggle(void *port, uint32_t pin)
 {
-	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
+    GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
 
-	HAL_GPIO_TogglePin(__port, pin);
+    HAL_GPIO_TogglePin(__port, pin);
 }
 
 static uint32_t exti_line_to_hal(uint32_t line)
@@ -113,12 +133,13 @@ static uint32_t exti_line_to_hal(uint32_t line)
 		mycase(15)
 	}
 #undef mycase
+    return EXTI_LINE_0;
 }
 
 
-void gpio_hal_irq_config(void * port,
+void gpio_hal_irq_config(void *port,
 		uint32_t pin,
-		gpio_hal_irq_edge_t edge,
+		gpio_irq_edge_t edge,
 		gpio_hal_irq_cb_t cb,
 		void *ctx)
 {
@@ -129,48 +150,36 @@ void gpio_hal_irq_config(void * port,
     hal_exti_slots[line].ctx = ctx;
 
 	uint32_t mode;
-	EXTI_CallbackIDTypeDef cbIdType;
 
 #define mycase(__edge, __mode) \
-	case GPIO_HAL_IRQ_EDGE_##__edge: \
+	case GPIO_IRQ_EDGE_##__edge: \
 	mode = GPIO_MODE_IT_##__mode; \
 	break;
 	switch(edge)
 	{
-		mycase(RISING, RISING);
+		mycase(RISING,  RISING);
 		mycase(FALLING, FALLING);
-		mycase(BOTH, RISING_FALLING);
+		mycase(BOTH,    RISING_FALLING);
 	}
 #undef mycase
 
-#define mycase(__edge, __mode) \
-	case GPIO_HAL_IRQ_EDGE_##__edge: \
-	cbIdType = HAL_EXTI_##__mode##_CB_ID; \
-	break;
-	
-	switch(edge)
-	{
-		mycase(RISING, RISING);
-		mycase(FALLING, FALLING);
-		mycase(BOTH, COMMON);
-	}
-#undef mycase
+    /* Preserve the pull config that was set by gpio_hal_init().
+     * PUPDR encoding: 0=no-pull, 1=pull-up, 2=pull-down — identical to
+     * GPIO_NOPULL / GPIO_PULLUP / GPIO_PULLDOWN HAL constants. */
+    uint32_t pin_pos    = __builtin_ctz(pin);
+    uint32_t saved_pull = (__port->PUPDR >> (2U * pin_pos)) & 0x3U;
 
     GPIO_InitTypeDef cfg = {
-        .Pin  = pin,
-        .Pull = GPIO_NOPULL,
-		.Speed = GPIO_SPEED_FREQ_HIGH,
-        .Mode = mode,
+        .Pin   = pin,
+        .Pull  = saved_pull,
+        .Speed = GPIO_SPEED_FREQ_LOW,   /* irrelevant for digital input */
+        .Mode  = mode,
     };
 
     HAL_GPIO_Init(__port, &cfg);
 
-	/* Get EXTI handle */
     HAL_EXTI_GetHandle(&hal_exti_slots[line].hexti,
-			exti_line_to_hal(line));
-
-    /* Register EXTI callback */
-    HAL_EXTI_RegisterCallback(&hal_exti_slots[line].hexti, cbIdType, NULL);
+            exti_line_to_hal(line));
 }
 
 static IRQn_Type exti_line_to_irq(uint32_t line)
@@ -186,16 +195,16 @@ static IRQn_Type exti_line_to_irq(uint32_t line)
 
 void gpio_hal_irq_enable(void *port, uint32_t pin)
 {
-	(void)port;
-	uint32_t line = __builtin_ctz(pin);
-	IRQn_Type irq = exti_line_to_irq(line);
+    (void)port;
+    uint32_t line = __builtin_ctz(pin);
+    IRQn_Type irq = exti_line_to_irq(line);
 
-	HAL_NVIC_SetPriority(irq, 10, 0);
-	HAL_NVIC_EnableIRQ(irq);
+    HAL_NVIC_SetPriority(irq, 10, 0);
+    HAL_NVIC_EnableIRQ(irq);
 }
 
 void gpio_hal_irq_disable(void *port, uint32_t pin)
 {
-	uint32_t line = __builtin_ctz(pin);
-	HAL_NVIC_DisableIRQ(exti_line_to_irq(line));
+    uint32_t line = __builtin_ctz(pin);
+    HAL_NVIC_DisableIRQ(exti_line_to_irq(line));
 }
