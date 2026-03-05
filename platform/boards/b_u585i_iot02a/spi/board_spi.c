@@ -23,15 +23,13 @@ static int board_spi1_close(void *ctx)
     return 0;
 }
 
-static int board_spi1_transfer_one(void *ctx,
-                                    const uint8_t *tx, uint8_t *rx, uint16_t len)
+static int board_spi1_transfer_one(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len)
 {
     return spi_drv_transfer_one((spi_t *)ctx, tx, rx, len);
 }
 
 static int board_spi1_transfer_one_it(void *ctx,
-                                       const uint8_t *tx, uint8_t *rx, uint16_t len,
-                                       spi_cb_t cb, void *cb_ctx)
+        const uint8_t *tx, uint8_t *rx, uint16_t len, spi_cb_t cb, void *cb_ctx)
 {
     /* spi_cb_t and the driver's callback type share the same definition from spi_types.h */
     return spi_drv_transfer_one_it((spi_t *)ctx, tx, rx, len, cb, cb_ctx);
@@ -56,10 +54,6 @@ static void map_mode(spi_mode_t mode, uint32_t *polarity, uint32_t *phase)
             *polarity = SPI_POLARITY_HIGH;
             *phase    = SPI_PHASE_2EDGE;
             break;
-        default:
-            *polarity = SPI_POLARITY_LOW;
-            *phase    = SPI_PHASE_1EDGE;
-            break;
     }
 }
 
@@ -74,8 +68,8 @@ static uint32_t map_clkdiv(spi_clkdiv_t div)
         case SPI_CLKDIV_64:  return SPI_BAUDRATEPRESCALER_64;
         case SPI_CLKDIV_128: return SPI_BAUDRATEPRESCALER_128;
         case SPI_CLKDIV_256: return SPI_BAUDRATEPRESCALER_256;
-        default:             return SPI_BAUDRATEPRESCALER_16;
     }
+    return SPI_BAUDRATEPRESCALER_16;
 }
 
 static uint32_t map_datasize(spi_datasize_t ds)
@@ -83,8 +77,8 @@ static uint32_t map_datasize(spi_datasize_t ds)
     switch (ds) {
         case SPI_DATASIZE_8:  return SPI_DATASIZE_8BIT;
         case SPI_DATASIZE_16: return SPI_DATASIZE_16BIT;
-        default:              return SPI_DATASIZE_8BIT;
     }
+    return SPI_DATASIZE_8BIT;
 }
 
 static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkdiv,
@@ -102,14 +96,20 @@ static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkd
     prescaler  = map_clkdiv(clkdiv);
     datawidth  = map_datasize(datasize);
 
-    spi_drv_deinit(drv);
+    if(phase != hspi->Init.CLKPhase ||
+            polarity != hspi->Init.CLKPolarity ||
+            prescaler != hspi->Init.BaudRatePrescaler ||
+            datawidth != hspi->Init.DataSize) {
+        spi_drv_deinit(drv);
 
-    hspi->Init.CLKPolarity       = polarity;
-    hspi->Init.CLKPhase          = phase;
-    hspi->Init.BaudRatePrescaler = prescaler;
-    hspi->Init.DataSize          = datawidth;
+        hspi->Init.CLKPolarity       = polarity;
+        hspi->Init.CLKPhase          = phase;
+        hspi->Init.BaudRatePrescaler = prescaler;
+        hspi->Init.DataSize          = datawidth;
 
-    return spi_drv_init(drv);
+        return spi_drv_init(drv);
+    }
+    return 0;
 }
 
 static int board_spi1_recover(void *ctx, uint32_t error_flags)
@@ -122,9 +122,7 @@ static int board_spi1_recover(void *ctx, uint32_t error_flags)
     HAL_SPI_Abort(hspi);
 
     spi_drv_deinit(drv);
-    spi_drv_init(drv);
-
-    return 0;
+    return spi_drv_init(drv);
 }
 
 static const struct spi_bus_ops spi1_bus_ops = {
@@ -183,7 +181,7 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
 {
     if (!bus_name || !name || slave_count >= BOARD_SPI_MAX_SLAVES) return -1;
 
-    struct spi_slave *s = &slave_pool[slave_count++];
+    struct spi_slave *s = &slave_pool[slave_count];
     s->name      = name;
     s->bus_name  = bus_name;
     s->cs_pin    = cs_pin;
@@ -195,5 +193,7 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
     gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
     gpio_write(cs_pin, GPIO_HIGH);
 
-    return spi_slave_register(s);
+    int rc = spi_slave_register(s);
+    if (rc == 0) slave_count++;
+    return rc;
 }

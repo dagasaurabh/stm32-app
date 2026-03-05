@@ -137,6 +137,12 @@ static void s_recover(spi_bus_state_t *st)
     }
 }
 
+static void s_complete_failed_message(struct spi_message *msg, uint32_t error_flags)
+{
+    if (!msg || !msg->complete) return;
+    msg->complete(msg->context, SPI_EVT_ERROR, error_flags);
+}
+
 /* SPI Registration */
 
 int spi_bus_register(struct spi_bus *bus)
@@ -281,6 +287,8 @@ static void spi_sync_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
 int spi_sync(int fd, struct spi_message *msg)
 {
     if (__get_IPSR() != 0) return -1;
+    if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
+    if (!msg || !msg->transfers) return -1;
 
     struct spi_sync_ctx sync_ctx = {0};
 
@@ -347,14 +355,14 @@ int spi_sync(int fd, struct spi_message *msg)
  *   - st->current
  *   - st->error_flags
  */
-static void spi_start_transfer(spi_bus_state_t *st)
+static int spi_start_transfer(spi_bus_state_t *st)
 {
     struct spi_slave *slave = st->slave;
     gpio_write(slave->cs_pin, GPIO_LOW);
-    st->bus->ops->transfer_one_it(st->bus->ctx,
-                                   st->current->tx_buf, st->current->rx_buf,
-                                   st->current->len,
-                                   spi_async_irq_cb, st);
+    return st->bus->ops->transfer_one_it(st->bus->ctx,
+            st->current->tx_buf, st->current->rx_buf,
+            st->current->len,
+            spi_async_irq_cb, st);
 }
 
 /*
@@ -372,6 +380,9 @@ static void spi_start_transfer(spi_bus_state_t *st)
 static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
 {
     spi_bus_state_t *st    = (spi_bus_state_t *)ctx;
+
+    if (!st || !st->msg || !st->current) return;
+
     struct spi_slave *slave = st->slave;
 
     if (event == SPI_EVT_ERROR) {
@@ -450,7 +461,14 @@ static void spi_async_irq_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
             st->current = next.msg->transfers;
             st->error_flags = 0;
 
-            spi_start_transfer(st);
+            if (spi_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, SPI_ERR_OVR);
+                st->needs_recovery = true;
+                st->recovery_flags |= SPI_ERR_OVR;
+                st->msg     = NULL;
+                st->current = NULL;
+                st->status  = SPI_BUS_IDLE;
+            }
         }
     }
     else {
@@ -530,7 +548,16 @@ int spi_async(int fd, struct spi_message *msg)
 
         s_recover(st);
         s_apply_config(st);
-        spi_start_transfer(st);
+        if (spi_start_transfer(st) < 0) {
+            uint32_t irq_state2 = spi_enter_critical();
+            st->msg            = NULL;
+            st->current        = NULL;
+            st->status         = SPI_BUS_IDLE;
+            st->needs_recovery = true;
+            st->recovery_flags |= SPI_ERR_OVR;
+            spi_exit_critical(irq_state2);
+            return -1;
+        }
     }
     else {
         /* Bus busy - enqueue */
@@ -596,8 +623,8 @@ void spi_poll(void)
         }
 
         if (st->needs_recovery) {
-            s_recover(st);
             spi_exit_critical(irq_state);
+            s_recover(st);
             continue;
         }
 
@@ -616,7 +643,14 @@ void spi_poll(void)
             spi_exit_critical(irq_state);
 
             s_apply_config(st);
-            spi_start_transfer(st);
+            if (spi_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, SPI_ERR_OVR);
+                st->msg            = NULL;
+                st->current        = NULL;
+                st->status         = SPI_BUS_IDLE;
+                st->needs_recovery = true;
+                st->recovery_flags |= SPI_ERR_OVR;
+            }
         }
         else {
             spi_exit_critical(irq_state);

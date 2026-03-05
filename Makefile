@@ -107,4 +107,5 @@ help:
 	@echo "  make BOARD=nucleo_l552ze_q TYPE=Debug		# Build for Nucleo L552ZE-Q"
 	@echo "  make BOARD=nucleo_l552ze_q TYPE=Release  	# Release build for nucleo_l552ze_q"
 	@echo "  make BOARD=b_u585i_iot02a TYPE=Debug    	# Build for B-U585I-IOT02A"
+	@echo "  make BOARD=b_u585i_iot02a TYPE=Release    	# Release build for B-U585I-IOT02A"
 	@echo "  make build-all                          	# Build for all boards"

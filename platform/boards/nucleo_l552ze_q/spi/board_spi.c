@@ -90,9 +90,8 @@ static uint32_t map_datasize(spi_datasize_t ds)
 static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkdiv,
         spi_datasize_t datasize)
 {
-    spi_t * spi_drv = (spi_t *)ctx;
-
-    SPI_HandleTypeDef *hspi = spi_drv->hal;
+    spi_t             *drv  = (spi_t *)ctx;
+    SPI_HandleTypeDef *hspi = drv->hal;
 
     uint32_t polarity = SPI_POLARITY_LOW;
     uint32_t phase = SPI_PHASE_1EDGE;
@@ -110,10 +109,10 @@ static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkd
 
         spi_drv_deinit((spi_t *)ctx);
 
-        hspi->Init.CLKPolarity = polarity;
-        hspi->Init.CLKPhase    = phase;
+        hspi->Init.CLKPolarity       = polarity;
+        hspi->Init.CLKPhase          = phase;
         hspi->Init.BaudRatePrescaler = prescaler;
-        hspi->Init.DataSize = datawidth;
+        hspi->Init.DataSize          = datawidth;
 
         return spi_drv_init((spi_t *)ctx);
     }
@@ -122,18 +121,14 @@ static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkd
 
 static int board_spi1_recover(void *ctx, uint32_t error_flags)
 {
-    spi_t * spi_drv = (spi_t *)ctx;
-
-    SPI_HandleTypeDef *hspi = spi_drv->hal;
+    spi_t             *drv  = (spi_t *)ctx;
+    SPI_HandleTypeDef *hspi = drv->hal;
 
     /* Abort ongoing transfer */
     HAL_SPI_Abort(hspi);
 
-    /* Fully reset peripheral */
-    spi_drv_deinit((spi_t *)ctx);
-    spi_drv_init((spi_t *)ctx);
-
-    return 0;
+    spi_drv_deinit(drv);
+    return spi_drv_init(drv);
 }
 
 static const struct spi_bus_ops spi1_bus_ops = {
@@ -200,7 +195,7 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
 {
     if (!bus_name || !name || slave_count >= BOARD_SPI_MAX_SLAVES) return -1;
 
-    struct spi_slave *s = &slave_pool[slave_count++];
+    struct spi_slave *s = &slave_pool[slave_count];
     s->name     = name;
     s->bus_name = bus_name;
     s->cs_pin   = cs_pin;
@@ -212,5 +207,7 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
     gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
     gpio_write(cs_pin, GPIO_HIGH);
 
-    return spi_slave_register(s);
+    int rc = spi_slave_register(s);
+    if (rc == 0) slave_count++;
+    return rc;
 }
