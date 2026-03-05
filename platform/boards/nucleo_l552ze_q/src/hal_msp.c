@@ -131,6 +131,29 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi)
     }
 }
 
+void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    if (hi2c->Instance == I2C1) {
+        __HAL_RCC_I2C1_CLK_ENABLE();
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+
+        /* PB8 = SCL (AF4 OD), PB9 = SDA (AF4 OD) */
+        GPIO_InitStruct.Pin       = GPIO_PIN_8 | GPIO_PIN_9;
+        GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
+        GPIO_InitStruct.Pull      = GPIO_PULLUP;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+        HAL_NVIC_SetPriority(I2C1_EV_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
+        HAL_NVIC_SetPriority(I2C1_ER_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
+    }
+}
+
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
