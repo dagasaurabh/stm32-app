@@ -23,7 +23,6 @@ target_compile_definitions(${P} INTERFACE
     BOARD_HAS_BUTTON
     BOARD_HAS_CONSOLE
 )
-target_link_libraries(${P} INTERFACE hal_pwr)
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)
 
 
@@ -32,3 +31,4 @@ if(CONFIG_BOARD_CONSOLE)
 add_subdirectory(console)
 endif()
 add_subdirectory(spi)
+add_subdirectory(i2c)

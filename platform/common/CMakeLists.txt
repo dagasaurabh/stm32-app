@@ -33,6 +33,13 @@ set(SPI_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/spi/src/spi.c)
 
 #-------------------------------------------------
 
+#---------------- I2C ----------------------------
+
+set(I2C_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/i2c/include)
+set(I2C_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/i2c/src/i2c.c)
+
+#-------------------------------------------------
+
 #----- Object library ----------------------------
 
 add_library(${P}_time_utils_obj OBJECT ${TIME_UTILS_SRCS})
@@ -50,6 +57,7 @@ add_library(${P}_obj OBJECT
     ${SERIAL_UART_SRCS}
     ${GPIO_SRCS}
     ${SPI_SRCS}
+    ${I2C_SRCS}
 )
 
 target_include_directories(${P}_obj PRIVATE
@@ -57,6 +65,7 @@ target_include_directories(${P}_obj PRIVATE
     ${SERIAL_UART_INCLUDE_DIR}
     ${GPIO_INCLUDE_DIR}
     ${SPI_INCLUDE_DIR}
+    ${I2C_INCLUDE_DIR}
     ${MCU_HAL_INCLUDES}
 )
 
@@ -72,6 +81,7 @@ target_include_directories(${P} INTERFACE
 	${SERIAL_UART_INCLUDE_DIR}
 	${GPIO_INCLUDE_DIR}
 	${SPI_INCLUDE_DIR}
+	${I2C_INCLUDE_DIR}
 	${TIME_UTILS_INCLUDE_DIR}
 )
 
