@@ -1,5 +1,11 @@
 #include "gpio_hal_if.h"  
-#include "stm32l5xx_hal.h"
+#if defined(STM32L552xx)
+ #include "stm32l5xx_hal.h"
+#elif defined(STM32U585xx)
+ #include "stm32u5xx_hal.h"
+#else
+ #error "Include STM32 HAL header file"
+#endif
 
 typedef struct {
     gpio_hal_irq_cb_t cb;
@@ -169,8 +175,8 @@ void gpio_hal_irq_config(void * port,
 
 static IRQn_Type exti_line_to_irq(uint32_t line)
 {
-#if defined(STM32L5)
-    /* STM32L5: EXTI0_IRQn ... EXTI15_IRQn are contiguous */
+#if defined(STM32L5) || defined(STM32U5)
+    /* STM32L5 and STM32U5: EXTI0_IRQn ... EXTI15_IRQn are contiguous */
     return (IRQn_Type)(EXTI0_IRQn + line);
 #else
 #error "EXTI IRQ mapping not implemented for this STM32 family"
