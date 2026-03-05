@@ -105,7 +105,7 @@ static int board_spi1_apply_config(void *ctx, spi_mode_t mode, spi_clkdiv_t clkd
     if(polarity != hspi->Init.CLKPolarity ||
             phase != hspi->Init.CLKPhase ||
             prescaler != hspi->Init.BaudRatePrescaler ||
-            datasize != hspi->Init.DataSize) {
+            datawidth != hspi->Init.DataSize) {
 
         spi_drv_deinit((spi_t *)ctx);
 
@@ -123,6 +123,8 @@ static int board_spi1_recover(void *ctx, uint32_t error_flags)
 {
     spi_t             *drv  = (spi_t *)ctx;
     SPI_HandleTypeDef *hspi = drv->hal;
+
+    (void)error_flags;
 
     /* Abort ongoing transfer */
     HAL_SPI_Abort(hspi);
