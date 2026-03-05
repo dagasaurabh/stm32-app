@@ -206,7 +206,7 @@ int board_spi_add_slave(const char *bus_name, const char *name, gpio_pin_t cs_pi
     s->datasize = datasize;
 
     /* Drive CS idle-high before the first transfer */
-    gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
+    gpio_init(cs_pin, GPIO_MODE_OUTPUT, GPIO_PULL_NONE, GPIO_SPEED_HIGH);
     gpio_write(cs_pin, GPIO_HIGH);
 
     int rc = spi_slave_register(s);

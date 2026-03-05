@@ -22,45 +22,18 @@ typedef struct {
 
 static board_irq_slot_t board_irq_slots[16];
 
-static void board_gpio_init(gpio_pin_t pin, gpio_mode_t mode, gpio_pull_t pp)
+static void board_gpio_init(gpio_pin_t pin, gpio_mode_t mode, gpio_pull_t pp, gpio_speed_t speed)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
-    gpio_drv_mode_t __mode;
-    gpio_drv_pull_t pull = GPIO_DRV_PULL_NONE;
-
-#define mycase(__in__, __out__) \
-    case GPIO_MODE_##__in__: \
-    __mode = GPIO_DRV_MODE_##__out__; \
-    break;
-    switch (mode) {
-        mycase(INPUT, INPUT);
-        mycase(OUTPUT, OUTPUT);
-        mycase(AF, AF);
-        mycase(ANALOG, ANALOG);
-    }
-#undef mycase
-
-#define mycase(__in__, __out__) \
-    case GPIO_PULL_##__in__: \
-    pull = GPIO_DRV_PULL_##__out__; \
-    break;
-
-    switch (pp) {
-        mycase(NONE, NONE);
-        mycase(UP, UP);
-        mycase(DOWN, DOWN);
-    }
-#undef mycase
-
-    gpio_drv_init_pin((gpio_port_t) port, pin_num, __mode, pull);
+    gpio_drv_init_pin((gpio_port_t) port, pin_num, mode, pp, speed);
 }
 
-static void board_gpio_wrtie(gpio_pin_t pin, gpio_level_t level)
+static void board_gpio_write(gpio_pin_t pin, gpio_level_t level)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_write((gpio_port_t) port, pin_num, level == GPIO_HIGH);
 }
@@ -68,20 +41,20 @@ static void board_gpio_wrtie(gpio_pin_t pin, gpio_level_t level)
 static gpio_level_t board_gpio_read(gpio_pin_t pin)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
-    return gpio_drv_read((gpio_port_t) port, pin_num) == GPIO_PIN_SET;
+    return gpio_drv_read((gpio_port_t) port, pin_num) ? GPIO_HIGH : GPIO_LOW;
 }
 
 static void board_gpio_toggle(gpio_pin_t pin)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_toggle((gpio_port_t) port, pin_num);
 }
 
-static void board_exti_irq_cb(gpio_port_t port, uint32_t pin, void *ctx)
+static void board_exti_irq_cb(void *ctx)
 {
     uint32_t line = (uint32_t)(uintptr_t)ctx;
 
@@ -90,17 +63,16 @@ static void board_exti_irq_cb(gpio_port_t port, uint32_t pin, void *ctx)
     }
 }
 
-static int board_gpio_irq_register(gpio_pin_t pin, 
+static int board_gpio_irq_register(gpio_pin_t pin,
         gpio_irq_edge_t edge,
         gpio_irq_cb_t cb,
         void *ctx)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
-    gpio_drv_irq_edge_t drv_edge;
+    uint16_t pin_num = gpio_pin_mask(pin);
 
-    /* 
-     * “Count Trailing Zeros” in the binary representation of x.
+    /*
+     * "Count Trailing Zeros" in the binary representation of x.
      */
     uint32_t line = __builtin_ctz(pin_num);
 
@@ -108,26 +80,14 @@ static int board_gpio_irq_register(gpio_pin_t pin,
 
     board_irq_slots[line] = (board_irq_slot_t){
         .pin = pin,
-            .cb  = cb,
-            .ctx = ctx,
+        .cb  = cb,
+        .ctx = ctx,
     };
-
-#define mycase(__in, __out) \
-    case GPIO_IRQ_EDGE_##__in: \
-    drv_edge = GPIO_DRV_IRQ_EDGE_##__out; \
-    break;
-    switch(edge) {
-        mycase(RISING, RISING);
-        mycase(FALLING, FALLING);
-        mycase(BOTH, BOTH);
-    }
-#undef mycase
-
 
     return gpio_drv_irq_register(
             port,
             pin_num,
-            drv_edge,
+            edge,
             board_exti_irq_cb,
             (void *)(uintptr_t)line);
 }
@@ -135,7 +95,7 @@ static int board_gpio_irq_register(gpio_pin_t pin,
 static void board_gpio_irq_enable(gpio_pin_t pin)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_irq_enable(port, pin_num);
 }
@@ -143,14 +103,14 @@ static void board_gpio_irq_enable(gpio_pin_t pin)
 static void board_gpio_irq_disable(gpio_pin_t pin)
 {
     GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
-    uint16_t pin_num = gpio_get_pin(pin);
+    uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_irq_disable(port, pin_num);
 }
 
 static const struct gpio_ops  __gpio_ops = {
     .init = board_gpio_init,
-    .write = board_gpio_wrtie,
+    .write = board_gpio_write,
     .read = board_gpio_read,
     .toggle = board_gpio_toggle,
     .irq_register = board_gpio_irq_register,
@@ -171,6 +131,6 @@ void board_init(void)
     __HAL_RCC_GPIOG_CLK_ENABLE();
     __HAL_RCC_GPIOH_CLK_ENABLE();
 
-    gpio_register(&__gpio_ops);
+    gpio_register(GPIO_CTRL_ONCHIP, &__gpio_ops);
 
 }

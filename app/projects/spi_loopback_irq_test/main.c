@@ -69,8 +69,8 @@ int main(void)
 
     board_spi_add_slave("spi1", "spi1.0", SPI1_CS_PIN, SPI_MODE_0, SPI_CLKDIV_16, SPI_DATASIZE_8);
 
-    gpio_init(RED_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
-    gpio_init(GREEN_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
+    gpio_init(RED_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE, GPIO_SPEED_LOW);
+    gpio_init(GREEN_LED, GPIO_MODE_OUTPUT, GPIO_PULL_NONE, GPIO_SPEED_LOW);
 
     gpio_write(GREEN_LED, GPIO_LOW);
     gpio_write(RED_LED, GPIO_LOW);
