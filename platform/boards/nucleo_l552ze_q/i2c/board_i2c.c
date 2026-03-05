@@ -183,14 +183,17 @@ void board_i2c_init(void)
 int board_i2c_add_slave(const char *bus_name, const char *name, 
         uint16_t addr, i2c_addr_mode_t addr_mode, i2c_speed_t speed)
 {
-    if (slave_count >= BOARD_I2C_MAX_SLAVES) return -1;
+    if (!bus_name || !name || slave_count >= BOARD_I2C_MAX_SLAVES) return -1;
 
-    struct i2c_slave *s = &slave_pool[slave_count++];
+    struct i2c_slave *s = &slave_pool[slave_count];
     s->name      = name;
     s->bus_name  = bus_name;
     s->addr      = addr;
     s->addr_mode = addr_mode;
     s->speed     = speed;
 
-    return i2c_slave_register(s);
+    int rc = i2c_slave_register(s);
+    if (rc == 0) slave_count++;
+
+    return rc;
 }
