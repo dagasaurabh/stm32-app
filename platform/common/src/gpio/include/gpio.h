@@ -1,29 +1,11 @@
 #pragma once
 #include <stdint.h>
-
-typedef enum {
-    GPIO_MODE_INPUT,
-    GPIO_MODE_OUTPUT,
-    GPIO_MODE_AF,
-    GPIO_MODE_ANALOG,
-} gpio_mode_t;
-
-typedef enum {
-    GPIO_PULL_NONE,
-    GPIO_PULL_UP,
-    GPIO_PULL_DOWN,
-} gpio_pull_t;
+#include "gpio_types.h"
 
 typedef enum {
     GPIO_LOW = 0,
     GPIO_HIGH = 1,
 } gpio_level_t;
-
-typedef enum {
-    GPIO_IRQ_EDGE_RISING,
-    GPIO_IRQ_EDGE_FALLING,
-    GPIO_IRQ_EDGE_BOTH,
-} gpio_irq_edge_t;
 
 
 typedef uint32_t gpio_pin_t;
@@ -31,7 +13,7 @@ typedef uint32_t gpio_pin_t;
 typedef void (*gpio_irq_cb_t)(gpio_pin_t pin, void *ctx);
 
 struct gpio_ops {
-    void (*init)(gpio_pin_t, gpio_mode_t, gpio_pull_t);
+    void (*init)(gpio_pin_t, gpio_mode_t, gpio_pull_t, gpio_speed_t);
     void (*write)(gpio_pin_t, gpio_level_t);
     gpio_level_t (*read)(gpio_pin_t);
     void (*toggle)(gpio_pin_t);
@@ -41,9 +23,15 @@ struct gpio_ops {
 };
 
 
-void gpio_register(const struct gpio_ops *);
+/* Controller IDs */
+#define GPIO_CTRL_ONCHIP     0
+#define GPIO_MAX_CONTROLLERS 4
 
-void gpio_init(gpio_pin_t, gpio_mode_t, gpio_pull_t);
+int gpio_register(uint8_t ctrl_id, const struct gpio_ops *ops);
+
+uint8_t gpio_get_ctrl(gpio_pin_t pin);
+
+void gpio_init(gpio_pin_t, gpio_mode_t, gpio_pull_t, gpio_speed_t);
 
 void gpio_write(gpio_pin_t, gpio_level_t);
 
@@ -58,7 +46,8 @@ void gpio_irq_enable(gpio_pin_t);
 void gpio_irq_disable(gpio_pin_t);
 
 /*
- * Encoding: [31:16] = port index, [15:0] = pin number
+ * Encoding: [31:24] = ctrl index | [23:16] = port index | [15:0] = pin number
+ * GPIO_PIN_ENCODE(port, pin) produces ctrl=0 (on-chip) by construction.
  * GPIOA --> 0
  * GPIOB --> 1
  * GPIOC --> 2
@@ -66,8 +55,14 @@ void gpio_irq_disable(gpio_pin_t);
  * GPIOE --> 4
  * ...
  */
-#define GPIO_PIN_ENCODE(port, pin) (((port) << 16) | (pin))
+#define GPIO_PIN_ENCODE(port, pin) \
+    (((uint32_t)(port) << 16) | (uint32_t)(pin))
 
-uint16_t gpio_get_pin(gpio_pin_t);
+/* Extended encoding with explicit controller index */
+#define GPIO_PIN_ENCODE_EXT(ctrl, port, pin) \
+    (((uint32_t)(ctrl) << 24) | ((uint32_t)(port) << 16) | (uint32_t)(pin))
 
-uint16_t gpio_get_port(gpio_pin_t);
+/* Returns the HAL pin bitmask (1 << pin_index) for use with GPIO_TypeDef */
+uint16_t gpio_pin_mask(gpio_pin_t);
+
+uint8_t gpio_get_port(gpio_pin_t);
