@@ -28,6 +28,7 @@ static struct i2c_slave *slave_table[I2C_MAX_SLAVES];
 static struct i2c_slave *fd_table[I2C_MAX_SLAVES];
 
 static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags);
+static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags);
 
 struct i2c_sync_ctx {
     volatile int        done;
@@ -409,6 +410,7 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
             st->error_flags = 0;
 
             if (i2c_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
                 st->needs_recovery = true;
                 st->recovery_flags |= I2C_ERR_TIMEOUT;
                 st->msg     = NULL;
@@ -433,6 +435,12 @@ static void s_apply_config(i2c_bus_state_t *st)
         st->current_speed     = st->slave->speed;
         st->current_addr_mode = st->slave->addr_mode;
     }
+}
+
+static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags)
+{
+    if (!msg || !msg->complete) return;
+    msg->complete(msg->context, I2C_EVT_ERROR, error_flags);
 }
 
 int i2c_async(int fd, struct i2c_message *msg)
@@ -531,6 +539,7 @@ void i2c_poll(void)
 
             s_apply_config(st);
             if (i2c_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
                 st->msg            = NULL;
                 st->current        = NULL;
                 st->status         = I2C_BUS_IDLE;
