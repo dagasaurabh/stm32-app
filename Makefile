@@ -31,9 +31,14 @@ all: toolchain hal configure build tools
 toolchain:
 	$(MAKE) -C toolchain
 
+# Board → HAL submodule mapping
+HAL_PATH_nucleo_l552ze_q := hal/STM32CubeL5
+HAL_PATH_b_u585i_iot02a  := hal/STM32CubeU5
+BOARD_HAL_PATH           := $(HAL_PATH_$(BOARD))
+
 hal:
-	git submodule sync --recursive
-	git submodule update --init --recursive
+	git submodule sync --recursive $(BOARD_HAL_PATH)
+	git submodule update --init --recursive $(BOARD_HAL_PATH)
 
 configure: toolchain hal
 	@echo "==> Configuring for board: $(BOARD) ($(TYPE) build)"
