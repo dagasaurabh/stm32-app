@@ -1,5 +1,12 @@
 #include "spi_hal_if.h"
+#if defined(STM32L552xx)
 #include "stm32l5xx_hal.h"
+#elif defined(STM32U585xx)
+#include "stm32u5xx_hal.h"
+#else
+#error "spi_hal.c: unsupported MCU family — define STM32L552xx or STM32U585xx"
+#endif
+
 
 /* ------------------------------------------------------------------ */
 /* Per-instance async state                                            */
