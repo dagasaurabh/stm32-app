@@ -28,6 +28,7 @@ static struct i2c_slave *slave_table[I2C_MAX_SLAVES];
 static struct i2c_slave *fd_table[I2C_MAX_SLAVES];
 
 static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags);
+static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags);
 
 struct i2c_sync_ctx {
     volatile int        done;
@@ -273,6 +274,8 @@ static void i2c_sync_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 int i2c_sync(int fd, struct i2c_message *msg)
 {
     if (__get_IPSR() != 0) return -1;
+    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd]) return -1;
+    if (!msg || !msg->transfers) return -1;
 
     struct i2c_sync_ctx sync_ctx = {0};
 
@@ -324,11 +327,11 @@ int i2c_sync(int fd, struct i2c_message *msg)
 /* Async (interrupt-driven) with per-bus message queue                 */
 /* ------------------------------------------------------------------ */
 
-static void i2c_start_transfer(i2c_bus_state_t *st)
+static int i2c_start_transfer(i2c_bus_state_t *st)
 {
     i2c_xfer_opt_t opt = get_xfer_options(st->msg, st->current);
 
-    st->bus->ops->transfer_one_it(
+    return st->bus->ops->transfer_one_it(
         st->bus->ctx,
         st->slave->addr << 1,     /* HAL uses 8-bit shifted address */
         st->current->dir,
@@ -350,6 +353,10 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 {
     i2c_bus_state_t *st = (i2c_bus_state_t *)ctx;
 
+    if (!st || !st->msg || !st->current) {
+        return;
+    }
+
     if (event == I2C_EVT_ERROR) {
         st->error_flags |= error_flags;
 
@@ -365,8 +372,13 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 
     if (st->current && st->error_flags == 0) {
         /* More transfers remain in this message — continue */
-        i2c_start_transfer(st);
-        return;
+        if (i2c_start_transfer(st) == 0) {
+            return;
+        }
+
+        st->error_flags |= I2C_ERR_TIMEOUT;
+        st->needs_recovery = true;
+        st->recovery_flags |= I2C_ERR_TIMEOUT;
     }
 
     /* ----- Message complete ----- */
@@ -397,7 +409,14 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
             st->current     = next.msg->transfers;
             st->error_flags = 0;
 
-            i2c_start_transfer(st);
+            if (i2c_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
+                st->needs_recovery = true;
+                st->recovery_flags |= I2C_ERR_TIMEOUT;
+                st->msg     = NULL;
+                st->current = NULL;
+                st->status  = I2C_BUS_IDLE;
+            }
         }
     } else {
         st->msg    = NULL;
@@ -416,6 +435,12 @@ static void s_apply_config(i2c_bus_state_t *st)
         st->current_speed     = st->slave->speed;
         st->current_addr_mode = st->slave->addr_mode;
     }
+}
+
+static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags)
+{
+    if (!msg || !msg->complete) return;
+    msg->complete(msg->context, I2C_EVT_ERROR, error_flags);
 }
 
 int i2c_async(int fd, struct i2c_message *msg)
@@ -448,7 +473,16 @@ int i2c_async(int fd, struct i2c_message *msg)
 
         s_recover(st);
         s_apply_config(st);
-        i2c_start_transfer(st);
+        if (i2c_start_transfer(st) < 0) {
+            uint32_t irq_state2 = i2c_enter_critical();
+            st->msg            = NULL;
+            st->current        = NULL;
+            st->status         = I2C_BUS_IDLE;
+            st->needs_recovery = true;
+            st->recovery_flags |= I2C_ERR_TIMEOUT;
+            i2c_exit_critical(irq_state2);
+            return -1;
+        }
     } else {
         if (st->q_count >= I2C_ASYNC_QUEUE_DEPTH) {
             i2c_exit_critical(irq_state);
@@ -504,7 +538,14 @@ void i2c_poll(void)
             i2c_exit_critical(irq_state);
 
             s_apply_config(st);
-            i2c_start_transfer(st);
+            if (i2c_start_transfer(st) < 0) {
+                s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
+                st->msg            = NULL;
+                st->current        = NULL;
+                st->status         = I2C_BUS_IDLE;
+                st->needs_recovery = true;
+                st->recovery_flags |= I2C_ERR_TIMEOUT;
+            }
         } else {
             i2c_exit_critical(irq_state);
         }
