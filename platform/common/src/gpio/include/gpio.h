@@ -46,7 +46,10 @@ void gpio_irq_enable(gpio_pin_t);
 void gpio_irq_disable(gpio_pin_t);
 
 /*
- * Encoding: [31:24] = ctrl index | [23:16] = port index | [15:0] = pin number
+ * Encoding: [31:24] = ctrl index | [23:16] = bank index | [15:0] = pin number
+ * bank is a binary index of a pin group within a controller:
+ *   on-chip: bank = port index (GPIOA=0, GPIOB=1, ...)
+ *   external I/O expander: bank = expander bank index
  * GPIO_PIN_ENCODE(port, pin) produces ctrl=0 (on-chip) by construction.
  * GPIOA --> 0
  * GPIOB --> 1
@@ -59,10 +62,10 @@ void gpio_irq_disable(gpio_pin_t);
     (((uint32_t)(port) << 16) | (uint32_t)(pin))
 
 /* Extended encoding with explicit controller index */
-#define GPIO_PIN_ENCODE_EXT(ctrl, port, pin) \
-    (((uint32_t)(ctrl) << 24) | ((uint32_t)(port) << 16) | (uint32_t)(pin))
+#define GPIO_PIN_ENCODE_EXT(ctrl, bank, pin) \
+    (((uint32_t)(ctrl) << 24) | ((uint32_t)(bank) << 16) | (uint32_t)(pin))
 
 /* Returns the HAL pin bitmask (1 << pin_index) for use with GPIO_TypeDef */
 uint16_t gpio_pin_mask(gpio_pin_t);
 
-uint8_t gpio_get_port(gpio_pin_t);
+uint8_t gpio_get_bank(gpio_pin_t);

@@ -24,7 +24,7 @@ static board_irq_slot_t board_irq_slots[16];
 
 static void board_gpio_init(gpio_pin_t pin, gpio_mode_t mode, gpio_pull_t pp, gpio_speed_t speed)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_init_pin((gpio_port_t) port, pin_num, mode, pp, speed);
@@ -32,7 +32,7 @@ static void board_gpio_init(gpio_pin_t pin, gpio_mode_t mode, gpio_pull_t pp, gp
 
 static void board_gpio_write(gpio_pin_t pin, gpio_level_t level)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_write((gpio_port_t) port, pin_num, level == GPIO_HIGH);
@@ -40,7 +40,7 @@ static void board_gpio_write(gpio_pin_t pin, gpio_level_t level)
 
 static gpio_level_t board_gpio_read(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     return gpio_drv_read((gpio_port_t) port, pin_num) ? GPIO_HIGH : GPIO_LOW;
@@ -48,7 +48,7 @@ static gpio_level_t board_gpio_read(gpio_pin_t pin)
 
 static void board_gpio_toggle(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_toggle((gpio_port_t) port, pin_num);
@@ -68,7 +68,7 @@ static int board_gpio_irq_register(gpio_pin_t pin,
         gpio_irq_cb_t cb,
         void *ctx)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     /*
@@ -94,7 +94,7 @@ static int board_gpio_irq_register(gpio_pin_t pin,
 
 static void board_gpio_irq_enable(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_irq_enable(port, pin_num);
@@ -102,7 +102,7 @@ static void board_gpio_irq_enable(gpio_pin_t pin)
 
 static void board_gpio_irq_disable(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_port(pin)];
+    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
     uint16_t pin_num = gpio_pin_mask(pin);
 
     gpio_drv_irq_disable(port, pin_num);

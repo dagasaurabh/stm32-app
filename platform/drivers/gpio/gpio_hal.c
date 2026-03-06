@@ -144,6 +144,9 @@ void gpio_hal_irq_config(void *port,
 		void *ctx)
 {
 	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
+
+	if (__port == NULL || pin == 0U || (pin & (pin - 1U)) != 0U) return;
+
 	uint32_t line = __builtin_ctz(pin);
 
 	hal_exti_slots[line].cb  = cb;
@@ -196,6 +199,9 @@ static IRQn_Type exti_line_to_irq(uint32_t line)
 void gpio_hal_irq_enable(void *port, uint32_t pin)
 {
     (void)port;
+
+    if (pin == 0U || (pin & (pin - 1U)) != 0U) return;
+
     uint32_t line = __builtin_ctz(pin);
     IRQn_Type irq = exti_line_to_irq(line);
 
@@ -205,6 +211,10 @@ void gpio_hal_irq_enable(void *port, uint32_t pin)
 
 void gpio_hal_irq_disable(void *port, uint32_t pin)
 {
+    (void)port;
+
+    if (pin == 0U || (pin & (pin - 1U)) != 0U) return;
+
     uint32_t line = __builtin_ctz(pin);
     HAL_NVIC_DisableIRQ(exti_line_to_irq(line));
 }

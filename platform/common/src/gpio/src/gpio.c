@@ -81,7 +81,7 @@ uint16_t gpio_pin_mask(gpio_pin_t pin)
     return 1U << (pin & 0xFFFF);
 }
 
-uint8_t gpio_get_port(gpio_pin_t pin)
+uint8_t gpio_get_bank(gpio_pin_t pin)
 {
     return (pin >> 16) & 0xFF;
 }

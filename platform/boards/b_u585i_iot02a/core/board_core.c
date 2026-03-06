@@ -19,7 +19,7 @@ static GPIO_TypeDef *port_table[] = {
 
 static GPIO_TypeDef *board_get_port(gpio_pin_t pin)
 {
-    uint8_t port_idx = gpio_get_port(pin);
+    uint8_t port_idx = gpio_get_bank(pin);
     if (port_idx >= BOARD_PORT_COUNT) {
         return NULL;
     }
