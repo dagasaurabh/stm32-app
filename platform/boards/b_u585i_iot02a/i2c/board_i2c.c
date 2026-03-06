@@ -98,8 +98,9 @@ static int board_i2c1_bus_recover(void *ctx)
 
     i2c_drv_deinit(dev);
 
-    gpio_init(I2C1_SCL_PIN, GPIO_MODE_OUTPUT, GPIO_PULL_UP);
-    gpio_init(I2C1_SDA_PIN, GPIO_MODE_OUTPUT, GPIO_PULL_UP);
+    /* Configure SCL and SDA as open-drain outputs for bus recovery */
+    gpio_init(I2C1_SCL_PIN, GPIO_MODE_OUTPUT_OD, GPIO_PULL_UP, GPIO_SPEED_HIGH);
+    gpio_init(I2C1_SDA_PIN, GPIO_MODE_OUTPUT_OD, GPIO_PULL_UP, GPIO_SPEED_HIGH);
 
     gpio_write(I2C1_SDA_PIN, GPIO_HIGH);
     gpio_write(I2C1_SCL_PIN, GPIO_HIGH);

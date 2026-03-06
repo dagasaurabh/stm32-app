@@ -25,11 +25,11 @@ int main(void)
 {
 	board_init();
 
-	gpio_init(LED_PIN, GPIO_MODE_OUTPUT, GPIO_PULL_NONE);
+	gpio_init(LED_PIN, GPIO_MODE_OUTPUT, GPIO_PULL_NONE, GPIO_SPEED_LOW);
 	gpio_write(LED_PIN, GPIO_LOW);
 
 	/* Button input */
-	gpio_init(BUTTON_PIN, GPIO_MODE_INPUT, GPIO_PULL_NONE);
+	gpio_init(BUTTON_PIN, GPIO_MODE_INPUT, GPIO_PULL_NONE, GPIO_SPEED_LOW);
 
 	/* Register EXTI interrupt */
 	gpio_irq_register(

@@ -2,49 +2,48 @@
 #include "gpio_hal_if.h"
 #include <assert.h>
 
-typedef struct {
-    gpio_port_t port;
-    uint32_t pin;
-    gpio_drv_irq_cb_t cb;
-    void *ctx;
-} gpio_irq_slot_t;
-
-static gpio_irq_slot_t irq_slots[16];
-
 void gpio_drv_init_pin(gpio_port_t port,
 		uint32_t pin,
-		gpio_drv_mode_t mode,
-		gpio_drv_pull_t pull)
+		gpio_mode_t mode,
+		gpio_pull_t pull,
+		gpio_speed_t speed)
 {
 	assert(port != NULL);
 	assert(pin != 0);
-	gpio_hal_mode_t hal_mode;
-	gpio_hal_pull_t hal_pull;
+	gpio_hal_mode_t hal_mode = (gpio_hal_mode_t)-1;
 
 #define mycase(__in, __out) \
-	case GPIO_DRV_MODE_##__in: \
+	case GPIO_MODE_##__in: \
 	hal_mode = GPIO_HAL_MODE_##__out; \
 	break;
 	switch(mode) {
-		mycase(INPUT, INPUT);
-		mycase(OUTPUT, OUTPUT);
-		mycase(AF, AF);
-		mycase(ANALOG, ANALOG);
+		mycase(INPUT,     INPUT);
+		mycase(OUTPUT,    OUTPUT);
+		mycase(OUTPUT_OD, OUTPUT_OD);
+		mycase(AF,        AF);
+		mycase(AF_OD,     AF_OD);
+		mycase(ANALOG,    ANALOG);
 	}
 #undef mycase
+
+    assert(hal_mode != -1);
+
+	gpio_hal_speed_t hal_speed = (gpio_hal_speed_t)-1;
 
 #define mycase(__in, __out) \
-	case GPIO_DRV_PULL_##__in: \
-	hal_pull = GPIO_HAL_PULL_##__out; \
+	case GPIO_SPEED_##__in: \
+	hal_speed = GPIO_HAL_SPEED_##__out; \
 	break;
-	switch(pull) {
-		mycase(NONE, NONE);
-		mycase(UP, UP);
-		mycase(DOWN, DOWN);
+	switch(speed) {
+		mycase(LOW,       LOW);
+		mycase(MEDIUM,    MEDIUM);
+		mycase(HIGH,      HIGH);
+		mycase(VERY_HIGH, VERY_HIGH);
 	}
 #undef mycase
+    assert(hal_speed != -1);
 
-	gpio_hal_init(port, pin, hal_mode, hal_pull);
+	gpio_hal_init(port, pin, hal_mode, pull, hal_speed);
 }
 
 void gpio_drv_write(gpio_port_t port, uint32_t pin, uint8_t level)
@@ -68,52 +67,17 @@ void gpio_drv_toggle(gpio_port_t port, uint32_t pin)
 	gpio_hal_toggle(port, pin);
 }
 
-static void gpio_drv_irq_cb(void *ctx)
-{
-    gpio_irq_slot_t *slot = ctx;
-
-    if(slot->cb) slot->cb(slot->port, slot->pin, slot->ctx);
-}
-
 int gpio_drv_irq_register(gpio_port_t port,
 		uint32_t pin,
-		gpio_drv_irq_edge_t edge,
+		gpio_irq_edge_t edge,
 		gpio_drv_irq_cb_t cb,
 		void *ctx)
 {
 	assert(port != NULL);
 	assert(pin != 0);
 
-    uint32_t line = __builtin_ctz(pin);
-
-    if(irq_slots[line].cb) return -1;
-
-    irq_slots[line] = (gpio_irq_slot_t){
-        .port = port,
-        .pin  = pin,
-        .cb   = cb,
-        .ctx  = ctx,
-    };
-
-	gpio_hal_irq_edge_t hal_edge;
-
-#define mycase(__in, __out) \
-	case GPIO_DRV_IRQ_EDGE_##__in: \
-	hal_edge = GPIO_HAL_IRQ_EDGE_##__out; \
-	break;
-	switch(edge) {
-		mycase(RISING, RISING);
-		mycase(FALLING, FALLING);
-		mycase(BOTH, BOTH);
-	}
-#undef mycase
-
-    gpio_hal_irq_config(port,
-			pin,
-			hal_edge,
-			gpio_drv_irq_cb,
-			&irq_slots[line]);
-    return 0;
+	gpio_hal_irq_config(port, pin, edge, cb, ctx);
+	return 0;
 }
 
 void gpio_drv_irq_enable(gpio_port_t port, uint32_t pin)
@@ -121,7 +85,7 @@ void gpio_drv_irq_enable(gpio_port_t port, uint32_t pin)
 	assert(port != NULL);
 	assert(pin != 0);
 
-    gpio_hal_irq_enable(port, pin);
+	gpio_hal_irq_enable(port, pin);
 }
 
 void gpio_drv_irq_disable(gpio_port_t port, uint32_t pin)
@@ -129,5 +93,5 @@ void gpio_drv_irq_disable(gpio_port_t port, uint32_t pin)
 	assert(port != NULL);
 	assert(pin != 0);
 
-    gpio_hal_irq_disable(port, pin);
+	gpio_hal_irq_disable(port, pin);
 }
