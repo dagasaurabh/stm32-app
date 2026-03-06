@@ -10,7 +10,7 @@ void gpio_drv_init_pin(gpio_port_t port,
 {
 	assert(port != NULL);
 	assert(pin != 0);
-	gpio_hal_mode_t hal_mode;
+	gpio_hal_mode_t hal_mode = (gpio_hal_mode_t)-1;
 
 #define mycase(__in, __out) \
 	case GPIO_MODE_##__in: \
@@ -26,7 +26,9 @@ void gpio_drv_init_pin(gpio_port_t port,
 	}
 #undef mycase
 
-	gpio_hal_speed_t hal_speed;
+    assert(hal_mode != -1);
+
+	gpio_hal_speed_t hal_speed = (gpio_hal_speed_t)-1;
 
 #define mycase(__in, __out) \
 	case GPIO_SPEED_##__in: \
@@ -39,6 +41,7 @@ void gpio_drv_init_pin(gpio_port_t port,
 		mycase(VERY_HIGH, VERY_HIGH);
 	}
 #undef mycase
+    assert(hal_speed != -1);
 
 	gpio_hal_init(port, pin, hal_mode, pull, hal_speed);
 }

@@ -3,7 +3,7 @@
 #include "gpio_driver.h"
 #include "stm32l5xx_hal.h"
 
-static GPIO_TypeDef* port_table[] = {
+static GPIO_TypeDef *port_table[] = {
     GPIOA,
     GPIOB,
     GPIOC,
@@ -13,6 +13,18 @@ static GPIO_TypeDef* port_table[] = {
     GPIOG,
     GPIOH,
 };
+
+#define BOARD_PORT_COUNT (sizeof(port_table) / sizeof(port_table[0]))
+
+static GPIO_TypeDef *board_get_port(gpio_pin_t pin)
+{
+    uint8_t port_idx = gpio_get_bank(pin);
+    if (port_idx >= BOARD_PORT_COUNT) {
+        return NULL;
+    }
+
+    return port_table[port_idx];
+}
 
 typedef struct {
     gpio_pin_t pin;
@@ -24,34 +36,50 @@ static board_irq_slot_t board_irq_slots[16];
 
 static void board_gpio_init(gpio_pin_t pin, gpio_mode_t mode, gpio_pull_t pp, gpio_speed_t speed)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
 
-    gpio_drv_init_pin((gpio_port_t) port, pin_num, mode, pp, speed);
+    if (port == NULL || pin_num == 0U) {
+        return;
+    }
+
+    gpio_drv_init_pin((gpio_port_t)port, pin_num, mode, pp, speed);
 }
 
 static void board_gpio_write(gpio_pin_t pin, gpio_level_t level)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
 
-    gpio_drv_write((gpio_port_t) port, pin_num, level == GPIO_HIGH);
+    if (port == NULL || pin_num == 0U) {
+        return;
+    }
+
+    gpio_drv_write((gpio_port_t)port, pin_num, level == GPIO_HIGH);
 }
 
 static gpio_level_t board_gpio_read(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
 
-    return gpio_drv_read((gpio_port_t) port, pin_num) ? GPIO_HIGH : GPIO_LOW;
+    if (port == NULL || pin_num == 0U) {
+        return GPIO_LOW;
+    }
+
+    return gpio_drv_read((gpio_port_t)port, pin_num) ? GPIO_HIGH : GPIO_LOW;
 }
 
 static void board_gpio_toggle(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
 
-    gpio_drv_toggle((gpio_port_t) port, pin_num);
+    if (port == NULL || pin_num == 0U) {
+        return;
+    }
+
+    gpio_drv_toggle((gpio_port_t)port, pin_num);
 }
 
 static void board_exti_irq_cb(void *ctx)
@@ -68,8 +96,12 @@ static int board_gpio_irq_register(gpio_pin_t pin,
         gpio_irq_cb_t cb,
         void *ctx)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
+
+    if (port == NULL || pin_num == 0U) {
+        return -1;
+    }
 
     /*
      * "Count Trailing Zeros" in the binary representation of x.
@@ -94,21 +126,29 @@ static int board_gpio_irq_register(gpio_pin_t pin,
 
 static void board_gpio_irq_enable(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
+
+    if (port == NULL || pin_num == 0U) {
+        return;
+    }
 
     gpio_drv_irq_enable(port, pin_num);
 }
 
 static void board_gpio_irq_disable(gpio_pin_t pin)
 {
-    GPIO_TypeDef * port = port_table[gpio_get_bank(pin)];
-    uint16_t pin_num = gpio_pin_mask(pin);
+    GPIO_TypeDef *port    = board_get_port(pin);
+    uint16_t      pin_num = gpio_pin_mask(pin);
+
+    if (port == NULL || pin_num == 0U) {
+        return;
+    }
 
     gpio_drv_irq_disable(port, pin_num);
 }
 
-static const struct gpio_ops  __gpio_ops = {
+static const struct gpio_ops __gpio_ops = {
     .init = board_gpio_init,
     .write = board_gpio_write,
     .read = board_gpio_read,

@@ -1,3 +1,4 @@
+#include <assert.h>
 #include "gpio_hal_if.h"
 #if defined(STM32L552xx)
  #include "stm32l5xx_hal.h"
@@ -14,6 +15,11 @@ typedef struct {
 } hal_exti_slot_t;
 
 static hal_exti_slot_t hal_exti_slots[16];
+
+static int gpio_hal_is_single_bit(uint32_t pin)
+{
+    return pin != 0U && (pin & (pin - 1U)) == 0U;
+}
 
 #define DEFINE_EXTI_IRQ_HANDLER(line) \
 void EXTI##line##_IRQHandler(void) \
@@ -46,7 +52,7 @@ void gpio_hal_init(void *port, uint32_t pin,
 		gpio_hal_speed_t speed)
 {
 	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
-	uint32_t gpio_mode;
+	uint32_t gpio_mode = 0xFFFFFFFF;
 
 #define mycase(__in__, __out__) \
 	case GPIO_HAL_MODE_##__in__: \
@@ -62,8 +68,9 @@ void gpio_hal_init(void *port, uint32_t pin,
 		mycase(ANALOG,    ANALOG);
 	}
 #undef mycase
+    assert(gpio_mode != 0xFFFFFFFF);
 
-	uint32_t gpio_speed;
+	uint32_t gpio_speed = 0xFFFFFFFF;
 
 #define mycase(__in__, __out__) \
 	case GPIO_HAL_SPEED_##__in__: \
@@ -77,6 +84,7 @@ void gpio_hal_init(void *port, uint32_t pin,
 		mycase(VERY_HIGH, VERY_HIGH);
 	}
 #undef mycase
+    assert(gpio_speed != 0xFFFFFFFF);
 
 	GPIO_InitTypeDef cfg = {
 		.Pin   = pin,
@@ -145,14 +153,16 @@ void gpio_hal_irq_config(void *port,
 {
 	GPIO_TypeDef * __port = (GPIO_TypeDef *)port;
 
-	if (__port == NULL || pin == 0U || (pin & (pin - 1U)) != 0U) return;
+	if (__port == NULL || !gpio_hal_is_single_bit(pin)) {
+		return;
+	}
 
 	uint32_t line = __builtin_ctz(pin);
 
 	hal_exti_slots[line].cb  = cb;
     hal_exti_slots[line].ctx = ctx;
 
-	uint32_t mode;
+	uint32_t mode = 0xFFFFFFFF;
 
 #define mycase(__edge, __mode) \
 	case GPIO_IRQ_EDGE_##__edge: \
@@ -165,6 +175,7 @@ void gpio_hal_irq_config(void *port,
 		mycase(BOTH,    RISING_FALLING);
 	}
 #undef mycase
+    assert(mode != 0xFFFFFFFF);
 
     /* Preserve the pull config that was set by gpio_hal_init().
      * PUPDR encoding: 0=no-pull, 1=pull-up, 2=pull-down — identical to
@@ -200,7 +211,9 @@ void gpio_hal_irq_enable(void *port, uint32_t pin)
 {
     (void)port;
 
-    if (pin == 0U || (pin & (pin - 1U)) != 0U) return;
+    if (!gpio_hal_is_single_bit(pin)) {
+        return;
+    }
 
     uint32_t line = __builtin_ctz(pin);
     IRQn_Type irq = exti_line_to_irq(line);
@@ -213,7 +226,9 @@ void gpio_hal_irq_disable(void *port, uint32_t pin)
 {
     (void)port;
 
-    if (pin == 0U || (pin & (pin - 1U)) != 0U) return;
+    if (!gpio_hal_is_single_bit(pin)) {
+        return;
+    }
 
     uint32_t line = __builtin_ctz(pin);
     HAL_NVIC_DisableIRQ(exti_line_to_irq(line));
