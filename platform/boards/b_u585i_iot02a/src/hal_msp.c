@@ -4,6 +4,12 @@ void HAL_MspInit(void)
 {
     __HAL_RCC_SYSCFG_CLK_ENABLE();
     __HAL_RCC_PWR_CLK_ENABLE();
+
+    /*
+     * GPIOB (PB8=I2C1_SCL, PB9=I2C1_SDA, etc.) is on the VDD_IO2 supply
+     * domain.  Without enabling VDDIO2, any GPIOB output/AF is non-functional.
+     */
+    HAL_PWREx_EnableVddIO2();
 }
 
 void HAL_UART_MspInit(UART_HandleTypeDef *huart)
@@ -65,5 +71,21 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
         HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);
         HAL_NVIC_SetPriority(I2C1_ER_IRQn, 5, 0);
         HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
+    } else if (hi2c->Instance == I2C2) {
+        __HAL_RCC_I2C2_CLK_ENABLE();
+        __HAL_RCC_GPIOH_CLK_ENABLE();
+
+        /* PH4 = SCL (AF4), PH5 = SDA (AF4) */
+        GPIO_InitStruct.Pin       = GPIO_PIN_4 | GPIO_PIN_5;
+        GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
+        GPIO_InitStruct.Pull      = GPIO_PULLUP;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
+        HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
+
+        HAL_NVIC_SetPriority(I2C2_EV_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+        HAL_NVIC_SetPriority(I2C2_ER_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
     }
 }
