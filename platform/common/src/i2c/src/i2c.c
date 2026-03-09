@@ -581,35 +581,40 @@ int i2c_read(int fd, uint8_t *buf, uint16_t len)
 /*
  * i2c_mem_write — write mem_addr_size address bytes then data bytes.
  *
- * Uses two WRITE transfers in one message so the bus issues only one
- * START (repeated-start between the two is suppressed by I2C_XFER_NEXT).
+ * Combines address and data into a single WRITE transfer (FIRST_AND_LAST_FRAME)
+ * so the HAL issues exactly one START, one address phase, all data bytes, and
+ * one STOP.  The previous two-transfer TX→TX approach relied on the STM32 HAL
+ * sequential API for same-direction continuation, which does not reliably omit
+ * the repeated START on all STM32 families.
+ *
+ * Max payload: 2-byte address + I2C_MEM_WRITE_MAX_DATA bytes of data.
  */
+#define I2C_MEM_WRITE_MAX_DATA 32
+
 int i2c_mem_write(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
                   const uint8_t *buf, uint16_t len)
 {
-    uint8_t addr_buf[2] = {0,};
+    if (len > I2C_MEM_WRITE_MAX_DATA) return -1;
+
+    uint8_t  combined[2 + I2C_MEM_WRITE_MAX_DATA];
     uint16_t addr_len;
 
     if (mem_addr_size == 2) {
-        addr_buf[0] = (uint8_t)(mem_addr >> 8);
-        addr_buf[1] = (uint8_t)(mem_addr & 0xFF);
+        combined[0] = (uint8_t)(mem_addr >> 8);
+        combined[1] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 2;
     } else {
-        addr_buf[0] = (uint8_t)(mem_addr & 0xFF);
+        combined[0] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 1;
     }
+    memcpy(combined + addr_len, buf, len);
 
-    struct i2c_transfer xfer_addr = {
-        .dir = I2C_DIR_WRITE, .buf = addr_buf, .len = addr_len
+    struct i2c_transfer xfer = {
+        .dir = I2C_DIR_WRITE, .buf = combined, .len = addr_len + len
     };
-    struct i2c_transfer xfer_data = {
-        .dir = I2C_DIR_WRITE, .buf = (uint8_t *)buf, .len = len
-    };
-
     struct i2c_message msg;
     i2c_message_init(&msg);
-    i2c_message_add_transfer(&msg, &xfer_addr);
-    i2c_message_add_transfer(&msg, &xfer_data);
+    i2c_message_add_transfer(&msg, &xfer);
     return i2c_sync(fd, &msg);
 }
 
