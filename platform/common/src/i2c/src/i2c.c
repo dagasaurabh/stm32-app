@@ -241,6 +241,8 @@ int i2c_close(int fd)
 
 void i2c_message_init(struct i2c_message *msg)
 {
+    if(!msg) return;
+
     msg->transfers = NULL;
     msg->tail      = NULL;
     msg->complete  = NULL;
@@ -249,6 +251,8 @@ void i2c_message_init(struct i2c_message *msg)
 
 void i2c_message_add_transfer(struct i2c_message *msg, struct i2c_transfer *xfer)
 {
+    if(!msg || !xfer) return;
+
     xfer->next = NULL;
     if (!msg->tail) {
         msg->transfers = xfer;
@@ -590,6 +594,8 @@ int i2c_mem_write(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
     uint8_t addr_buf[2] = {0,};
     uint16_t addr_len;
 
+    if(!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2)) return -1;
+
     if (mem_addr_size == 2) {
         addr_buf[0] = (uint8_t)(mem_addr >> 8);
         addr_buf[1] = (uint8_t)(mem_addr & 0xFF);
@@ -624,6 +630,8 @@ int i2c_mem_read(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
 {
     uint8_t addr_buf[2];
     uint16_t addr_len;
+
+    if(!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2)) return -1;
 
     if (mem_addr_size == 2) {
         addr_buf[0] = (uint8_t)(mem_addr >> 8);
