@@ -1,0 +1,29 @@
+---
+name: Code Style
+
+"on":
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: EditorConfig check
+        uses: editorconfig-checker/action-editorconfig-checker@v2
+
+      - name: Install clang-format
+        run: sudo apt-get install -y clang-format
+
+      - name: Check clang-format
+        run: |
+          files=$(git diff --name-only origin/main \
+          | grep -E '\.(c|h|cpp|hpp)$' || true)
+          if [ -n "$files" ]; then
+            clang-format --style=file --dry-run --Werror $files
+          fi
