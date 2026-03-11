@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <stdbool.h>
 #include "iis2mdc.h"
 
 #define IIS2MDC_REG_WHO_AM_I  0x4F
@@ -5,11 +7,25 @@
 #define IIS2MDC_REG_CFG_C     0x62
 #define IIS2MDC_REG_OUTX_L    0x68
 
-#define IIS2MDC_MAG_SENS      0.0015f  /* gauss/LSB */
+#define IIS2MDC_MAG_SENS      0.0015f
 
-static void iis2mdc_async_done(void *ctx, int status);
+struct iis2mdc_s {
+    sensor_t     sensor;
 
-static void iis2mdc_convert(iis2mdc_t *dev, float *mx, float *my, float *mz)
+    bool         initialized;
+    regmap_t    *map;
+
+    bool    read_pending;
+    uint8_t raw[6];
+
+    sensor_done_cb_t pending_cb;
+    void            *pending_ctx;
+};
+
+static struct iis2mdc_s s_pool[IIS2MDC_MAX_DEVICES];
+
+static void iis2mdc_convert(struct iis2mdc_s *dev,
+        float *mx, float *my, float *mz)
 {
     int16_t xr = (int16_t)((uint16_t)dev->raw[0] | ((uint16_t)dev->raw[1] << 8));
     int16_t yr = (int16_t)((uint16_t)dev->raw[2] | ((uint16_t)dev->raw[3] << 8));
@@ -20,19 +36,67 @@ static void iis2mdc_convert(iis2mdc_t *dev, float *mx, float *my, float *mz)
     if (mz) *mz = (float)zr * IIS2MDC_MAG_SENS;
 }
 
-int iis2mdc_init(iis2mdc_t *dev, regmap_t *map)
+static void iis2mdc_regmap_done(void *ctx, int status)
 {
-    if (!map) return -1;
+    struct iis2mdc_s *dev = (struct iis2mdc_s *)ctx;
+    dev->read_pending = false;
+    sensor_done_cb_t cb   = dev->pending_cb;
+    void            *pctx = dev->pending_ctx;
+    dev->pending_cb  = NULL;
+    dev->pending_ctx = NULL;
+    if (cb) cb(&dev->sensor, status, pctx);
+}
+
+static int iis2mdc_ops_read_async(sensor_t *self,
+        sensor_done_cb_t cb, void *ctx)
+{
+    struct iis2mdc_s *dev = (struct iis2mdc_s *)self;
+    if (dev->read_pending) return -EBUSY;
+    dev->read_pending = true;
+    dev->pending_cb   = cb;
+    dev->pending_ctx  = ctx;
+    return regmap_read_async(dev->map, IIS2MDC_REG_OUTX_L,
+                             dev->raw, 6, iis2mdc_regmap_done, dev);
+}
+
+static int iis2mdc_ops_read_sync(sensor_t *self, void *out)
+{
+    struct iis2mdc_s *dev  = (struct iis2mdc_s *)self;
+    iis2mdc_data_t   *data = (iis2mdc_data_t *)out;
+    if (regmap_read(dev->map, IIS2MDC_REG_OUTX_L, dev->raw, 6) < 0) return -1;
+    iis2mdc_convert(dev, &data->mx, &data->my, &data->mz);
+    return 0;
+}
+
+static void iis2mdc_ops_get_data(sensor_t *self, void *out)
+{
+    struct iis2mdc_s *dev  = (struct iis2mdc_s *)self;
+    iis2mdc_data_t   *data = (iis2mdc_data_t *)out;
+    iis2mdc_convert(dev, &data->mx, &data->my, &data->mz);
+}
+
+sensor_t *iis2mdc_init(regmap_t *map)
+{
+    if (!map) return NULL;
+
+    for (int i = 0; i < IIS2MDC_MAX_DEVICES; i++) {
+        if (s_pool[i].initialized && s_pool[i].map == map) return &s_pool[i].sensor;
+    }
+
+    struct iis2mdc_s *dev = NULL;
+    for (int i = 0; i < IIS2MDC_MAX_DEVICES; i++) {
+        if (!s_pool[i].initialized) { dev = &s_pool[i]; break; }
+    }
+    if (!dev) return NULL;
+
     dev->map = map;
 
     uint8_t who = 0;
-    if (regmap_read(map, IIS2MDC_REG_WHO_AM_I, &who, 1) < 0) return -1;
-    if (who != IIS2MDC_WHOAMI) return -1;
+    if (regmap_read(map, IIS2MDC_REG_WHO_AM_I, &who, 1) < 0) return NULL;
+    if (who != IIS2MDC_WHOAMI) return NULL;
 
-    /* Soft reset — clears all registers to defaults; SOFT_RST bit
-     * auto-clears when reset is complete (~5 ms typical) */
-    uint8_t rst = 0x20;  /* SOFT_RST bit in CFG_A */
-    if (regmap_write(map, IIS2MDC_REG_CFG_A, &rst, 1) < 0) return -1;
+    uint8_t rst = 0x20;
+    if (regmap_write(map, IIS2MDC_REG_CFG_A, &rst, 1) < 0) return NULL;
 
     uint8_t val;
     int retries = 500;
@@ -40,43 +104,18 @@ int iis2mdc_init(iis2mdc_t *dev, regmap_t *map)
         val = 0x20;
         regmap_read(map, IIS2MDC_REG_CFG_A, &val, 1);
     } while ((val & 0x20) && --retries > 0);
-    if (retries == 0) return -1;
+    if (retries == 0) return NULL;
 
-    /* BDU=1: block data update — output registers not updated until both
-     * MSB and LSB have been read, preventing mismatched high/low bytes */
     uint8_t cfg_c = 0x10;
-    if (regmap_write(map, IIS2MDC_REG_CFG_C, &cfg_c, 1) < 0) return -1;
+    if (regmap_write(map, IIS2MDC_REG_CFG_C, &cfg_c, 1) < 0) return NULL;
 
-    /* Continuous mode, 100 Hz ODR (ODR[1:0]=11, MD[1:0]=00) */
     uint8_t cfg_a = 0x0C;
-    if (regmap_write(map, IIS2MDC_REG_CFG_A, &cfg_a, 1) < 0) return -1;
+    if (regmap_write(map, IIS2MDC_REG_CFG_A, &cfg_a, 1) < 0) return NULL;
 
-    return 0;
-}
-
-int iis2mdc_read(iis2mdc_t *dev, float *mx, float *my, float *mz)
-{
-    /* 6 bytes: OUTX_L(0x68), OUTX_H, OUTY_L, OUTY_H, OUTZ_L, OUTZ_H */
-    if (regmap_read(dev->map, IIS2MDC_REG_OUTX_L, dev->raw, 6) < 0)
-        return -1;
-    iis2mdc_convert(dev, mx, my, mz);
-    return 0;
-}
-
-int iis2mdc_read_async(iis2mdc_t *dev, iis2mdc_cb_t cb, void *ctx)
-{
-    dev->cb     = cb;
-    dev->cb_ctx = ctx;
-    return regmap_read_async(dev->map, IIS2MDC_REG_OUTX_L,
-                             dev->raw, 6, iis2mdc_async_done, dev);
-}
-
-static void iis2mdc_async_done(void *ctx, int status)
-{
-    iis2mdc_t *dev = (iis2mdc_t *)ctx;
-    if (status != 0 || !dev->cb) return;
-
-    float mx, my, mz;
-    iis2mdc_convert(dev, &mx, &my, &mz);
-    dev->cb(dev->cb_ctx, mx, my, mz);
+    dev->sensor.read_async = iis2mdc_ops_read_async;
+    dev->sensor.read_sync  = iis2mdc_ops_read_sync;
+    dev->sensor.get_data   = iis2mdc_ops_get_data;
+    dev->sensor.data_size  = sizeof(iis2mdc_data_t);
+    dev->initialized       = true;
+    return &dev->sensor;
 }
