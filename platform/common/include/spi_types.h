@@ -33,12 +33,13 @@ typedef enum {
  *
  * Non-zero only when event == SPI_EVT_ERROR.
  */
-#define SPI_ERR_NONE  0x00U  /* no error                   */
+#define SPI_ERR_NONE  0x00U  /* no error                          */
 #define SPI_ERR_MODF  0x01U  /* mode fault (SS low in master mode) */
-#define SPI_ERR_CRC   0x02U  /* CRC mismatch               */
-#define SPI_ERR_OVR   0x04U  /* overrun (data lost)        */
-#define SPI_ERR_FRE   0x08U  /* frame format error         */
-#define SPI_ERR_DMA   0x10U  /* DMA transfer error         */
+#define SPI_ERR_CRC   0x02U  /* CRC mismatch                      */
+#define SPI_ERR_OVR   0x04U  /* overrun (data lost)               */
+#define SPI_ERR_FRE   0x08U  /* frame format error                */
+#define SPI_ERR_DMA   0x10U  /* DMA transfer error                */
+#define SPI_ERR_ABORT 0x20U  /* transfer discarded by spi_reset() */
 
 /*
  * spi_cb_t — universal SPI completion callback.

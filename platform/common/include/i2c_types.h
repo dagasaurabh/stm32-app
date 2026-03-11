@@ -22,6 +22,7 @@ typedef enum {
 #define I2C_ERR_BERR    0x04U  /* bus error (misplaced START/STOP)  */
 #define I2C_ERR_ARLO    0x08U  /* arbitration lost                  */
 #define I2C_ERR_DMA     0x10U  /* DMA transfer error                */
+#define I2C_ERR_ABORT   0x20U  /* transfer discarded by i2c_reset() */
 
 /*
  * i2c_cb_t — universal I2C completion callback.
