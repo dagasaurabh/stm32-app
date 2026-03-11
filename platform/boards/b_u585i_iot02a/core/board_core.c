@@ -156,9 +156,73 @@ static const struct gpio_ops __gpio_ops = {
     .irq_disable  = board_gpio_irq_disable,
 };
 
+/*
+ * SystemClock_Config — bring SYSCLK to 160 MHz via PLL.
+ *
+ * Must be called once from board_init(), immediately after HAL_Init().
+ * Without it the MCU runs at the 4 MHz MSI default.
+ *
+ * Why this matters for peripherals:
+ *   - I2C : TIMINGR is a hardcoded constant calculated for 160 MHz PCLK.
+ *           At 4 MHz those values produce a completely wrong SCL period
+ *           and all transfers fail.
+ *   - SPI : self-synchronous (master drives SCK), so it tolerates any
+ *           clock but runs much slower than intended.
+ *   - UART: HAL_UART_Init() queries the actual PCLK at runtime and
+ *           auto-computes BRR, so baud rate stays correct regardless.
+ *
+ * This function is intentionally NOT in hal_msp.c. hal_msp.c is reserved
+ * for HAL_XXX_MspInit() peripheral callbacks invoked from within HAL init
+ * functions. SystemClock_Config() is system-level startup code, not a
+ * peripheral callback.
+ */
+static void SystemClock_Config(void)
+{
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+    /* Voltage scaling required for 160 MHz operation */
+    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+        while (1) {}
+
+    /* MSI 4 MHz -> PLL1 (x80 /2) -> 160 MHz SYSCLK */
+    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
+    RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+    RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_4;
+    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_MSI;
+    RCC_OscInitStruct.PLL.PLLMBOOST       = RCC_PLLMBOOST_DIV1;
+    RCC_OscInitStruct.PLL.PLLM            = 1;
+    RCC_OscInitStruct.PLL.PLLN            = 80;
+    RCC_OscInitStruct.PLL.PLLP            = 2;
+    RCC_OscInitStruct.PLL.PLLQ            = 2;
+    RCC_OscInitStruct.PLL.PLLR            = 2;
+    RCC_OscInitStruct.PLL.PLLRGE          = RCC_PLLVCIRANGE_0;
+    RCC_OscInitStruct.PLL.PLLFRACN        = 0;
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+        while (1) {}
+
+    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_HCLK  | RCC_CLOCKTYPE_SYSCLK |
+                                       RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2  |
+                                       RCC_CLOCKTYPE_PCLK3;
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV1;
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+        while (1) {}
+}
+
 void board_init(void)
 {
     HAL_Init();
+    SystemClock_Config();
+
+    /* Enable instruction cache (required for reliable operation at 160 MHz) */
+    HAL_ICACHE_ConfigAssociativityMode(ICACHE_1WAY);
+    HAL_ICACHE_Enable();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
