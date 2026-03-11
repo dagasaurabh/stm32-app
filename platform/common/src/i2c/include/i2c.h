@@ -37,7 +37,7 @@ struct i2c_message {
 /*
  * i2c_bus_ops — hardware controller operations.
  *
- * transfer_one    : blocking raw transfer.
+ * transfer_one    : blocking; returns when transfer completes.
  * transfer_one_it : non-blocking; cb(cb_ctx, event, err) called from ISR.
  * apply_config    : update bus speed / addressing mode; called lazily.
  * recover         : software abort + reinit after a transfer error.
@@ -97,11 +97,42 @@ int i2c_sync(int fd, struct i2c_message *msg);
 int i2c_async(int fd, struct i2c_message *msg);
 
 /* Application API */
+
+/*
+ * i2c_open — open a registered slave by name; returns fd or -1.
+ *
+ * PRECONDITION: the bus that the slave belongs to must already be registered
+ * via i2c_bus_register() before calling i2c_open().  In practice this means
+ * board_i2c_init() must be called before board_i2c_add_slave() / i2c_open().
+ * Violating this order returns -1 with no further diagnostic.
+ */
 int i2c_open(const char *slave_name);   /* returns fd */
 int i2c_close(int fd);
 
 /* Must be called from the main loop when using async mode */
 void i2c_poll(void);
+
+/*
+ * i2c_reset — abort any in-flight transfer, drain the queue, and recover the bus.
+ *
+ * Intended for recovery when sensor_mgr detects repeated errors or a bus hang.
+ * All discarded messages have their completion callbacks invoked with
+ * I2C_EVT_ERROR / I2C_ERR_ABORT so callers unblock cleanly.
+ *
+ * Must NOT be called from ISR context.
+ * Returns 0 on success, -1 if fd is invalid.
+ */
+int i2c_reset(int fd);
+
+/*
+ * I2C_MEM_WRITE_MAX_DATA — maximum data payload for i2c_mem_write().
+ *
+ * i2c_mem_write combines the register address and data bytes into a single
+ * stack buffer to work around the STM32 HAL TX→TX sequential transfer bug
+ * (see i2c.c).  The buffer is 2 (max addr bytes) + this constant bytes.
+ * Passing len > I2C_MEM_WRITE_MAX_DATA returns -1 immediately.
+ */
+#define I2C_MEM_WRITE_MAX_DATA  32
 
 /* Convenience wrappers — blocking, build single/two-transfer messages internally */
 int i2c_write(int fd, const uint8_t *buf, uint16_t len);
