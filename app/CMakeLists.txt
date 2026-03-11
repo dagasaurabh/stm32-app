@@ -17,30 +17,30 @@ function(build_app APP)
    # flash
     add_custom_target(${APP}_flash
         COMMAND ${OPENOCD_BIN}
-	    -s ${OPENOCD_SCRIPTS}
+        -s ${OPENOCD_SCRIPTS}
             -f ${OPENOCD_CFG}
             -c "program $<TARGET_FILE:${APP}.elf> verify reset exit"
         DEPENDS ${APP}.elf
         USES_TERMINAL
     )
-    
+
     # debug server
     add_custom_target(${APP}_debug
         COMMAND ${OPENOCD_BIN}
-	    -s ${OPENOCD_SCRIPTS}
-	    -f ${OPENOCD_CFG}
-	USES_TERMINAL
-	COMMENT "Starting OpenOCD GDB server"
+        -s ${OPENOCD_SCRIPTS}
+        -f ${OPENOCD_CFG}
+    USES_TERMINAL
+    COMMENT "Starting OpenOCD GDB server"
     )
 
     #gdb client
     add_custom_target(${APP}_gdb
         COMMAND ${CMAKE_GDB}
-	    $<TARGET_FILE:${APP}.elf>
-	    -x ${APP_DIR}/scripts/gdb_startup.gdb
-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-	USES_TERMINAL
-	COMMENT "Launching GDB with default startup commands"
+        $<TARGET_FILE:${APP}.elf>
+        -x ${APP_DIR}/scripts/gdb_startup.gdb
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    USES_TERMINAL
+    COMMENT "Launching GDB with default startup commands"
     )
 
 endfunction(build_app)

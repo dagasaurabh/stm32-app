@@ -19,8 +19,10 @@
 #define IIS2MDC_MAX_DEVICES 1
 #endif
 
-typedef struct {
-    float mx, my, mz;   /* gauss */
+typedef struct
+{
+    float mx, my, mz; /* gauss */
 } iis2mdc_data_t;
 
-sensor_t *iis2mdc_init(regmap_t *map);
+sensor_t *
+iis2mdc_init(regmap_t *map);

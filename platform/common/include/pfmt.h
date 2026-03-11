@@ -16,23 +16,32 @@
  * pf3(v)  — 3 decimal places: e.g.  23.456
  */
 
-static inline void pf1(float v)
+static inline void
+pf1(float v)
 {
     int32_t x = (int32_t)(v * 10.0f);
-    if (x < 0) printf("-%ld.%ld",  (long)(-x / 10),   (long)(-x % 10));
-    else        printf("%ld.%ld",   (long)(x / 10),    (long)(x % 10));
+    if (x < 0)
+        printf("-%ld.%ld", (long)(-x / 10), (long)(-x % 10));
+    else
+        printf("%ld.%ld", (long)(x / 10), (long)(x % 10));
 }
 
-static inline void pf2(float v)
+static inline void
+pf2(float v)
 {
     int32_t x = (int32_t)(v * 100.0f);
-    if (x < 0) printf("-%ld.%02ld", (long)(-x / 100),  (long)(-x % 100));
-    else        printf("%ld.%02ld",  (long)(x / 100),   (long)(x % 100));
+    if (x < 0)
+        printf("-%ld.%02ld", (long)(-x / 100), (long)(-x % 100));
+    else
+        printf("%ld.%02ld", (long)(x / 100), (long)(x % 100));
 }
 
-static inline void pf3(float v)
+static inline void
+pf3(float v)
 {
     int32_t x = (int32_t)(v * 1000.0f);
-    if (x < 0) printf("-%ld.%03ld", (long)(-x / 1000), (long)(-x % 1000));
-    else        printf("%ld.%03ld",  (long)(x / 1000),  (long)(x % 1000));
+    if (x < 0)
+        printf("-%ld.%03ld", (long)(-x / 1000), (long)(-x % 1000));
+    else
+        printf("%ld.%03ld", (long)(x / 1000), (long)(x % 1000));
 }

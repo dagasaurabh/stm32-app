@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cmsis_compiler.h"   /* __DMB, __get_PRIMASK, __set_PRIMASK, __disable_irq,
+#include "cmsis_compiler.h" /* __DMB, __get_PRIMASK, __set_PRIMASK, __disable_irq,
                                 * __get_IPSR — Cortex-M CMSIS intrinsics */
 
 /*
@@ -70,10 +70,10 @@
  */
 
 /* Insert AFTER writing all data fields, BEFORE setting the ready flag (ISR) */
-#define PLATFORM_RELEASE_STORE()  __DMB()
+#define PLATFORM_RELEASE_STORE() __DMB()
 
 /* Insert AFTER clearing the ready flag, BEFORE reading data fields (main loop) */
-#define PLATFORM_ACQUIRE_LOAD()   __DMB()
+#define PLATFORM_ACQUIRE_LOAD() __DMB()
 
 /* =========================================================================
  * 2. Critical sections — save/restore PRIMASK
@@ -94,11 +94,14 @@
  * Important: the variable passed to PLATFORM_IRQ_SAVE must be declared before
  * the macro is invoked.  Do not use these macros across function boundaries.
  */
-#define PLATFORM_IRQ_SAVE(state) \
-    do { (state) = __get_PRIMASK(); __disable_irq(); } while (0)
+#define PLATFORM_IRQ_SAVE(state)                                                                   \
+    do                                                                                             \
+    {                                                                                              \
+        (state) = __get_PRIMASK();                                                                 \
+        __disable_irq();                                                                           \
+    } while (0)
 
-#define PLATFORM_IRQ_RESTORE(state) \
-    __set_PRIMASK(state)
+#define PLATFORM_IRQ_RESTORE(state) __set_PRIMASK(state)
 
 /* =========================================================================
  * 3. ISR context detection
@@ -115,4 +118,4 @@
  *
  *   if (PLATFORM_IN_ISR()) return -1;   // reject call from interrupt context
  */
-#define PLATFORM_IN_ISR()   (__get_IPSR() != 0u)
+#define PLATFORM_IN_ISR() (__get_IPSR() != 0u)

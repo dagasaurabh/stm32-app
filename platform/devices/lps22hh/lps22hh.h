@@ -19,9 +19,11 @@
 #define LPS22HH_MAX_DEVICES 1
 #endif
 
-typedef struct {
+typedef struct
+{
     float pressure_hpa;
     float temp_c;
 } lps22hh_data_t;
 
-sensor_t *lps22hh_init(regmap_t *map);
+sensor_t *
+lps22hh_init(regmap_t *map);

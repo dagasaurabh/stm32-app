@@ -14,5 +14,5 @@
  *  - Implemented by MCU family code.
  *  - Consumed by syscalls and common services
  */
-uint64_t time_source_now_us(void);
-
+uint64_t
+time_source_now_us(void);

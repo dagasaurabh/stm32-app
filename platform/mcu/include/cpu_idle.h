@@ -12,5 +12,5 @@
  *  - Implemented by MCU family code
  *  - Used by syscalls and common services
  */
-void cpu_idle(void);
-
+void
+cpu_idle(void);

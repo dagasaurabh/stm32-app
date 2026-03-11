@@ -54,7 +54,7 @@ target_sources(${P}_core INTERFACE $<TARGET_OBJECTS:${P}_core_impl>)
 #         effective_deps = DEFAULT_DEPS
 #     else:
 #         effective_deps = DEFAULT_DEPS + deps
-#     
+#
 #     dep_targets = " ".join([f"${{P}}_{d}" for d in effective_deps])
 #     cog.outl(f"target_link_libraries(${{P}}_{module} INTERFACE {dep_targets})")
 #     cog.outl(f"target_sources(${{P}}_{module} INTERFACE $<TARGET_OBJECTS:${{P}}_{module}_impl>)")

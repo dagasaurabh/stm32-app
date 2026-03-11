@@ -10,7 +10,8 @@
  *  - Resolution: 1 ms
  *  - Monotonic as long as SysTick runs
  */
-uint64_t time_source_now_us(void)
+uint64_t
+time_source_now_us(void)
 {
     return (uint64_t)HAL_GetTick() * 1000ULL;
 }

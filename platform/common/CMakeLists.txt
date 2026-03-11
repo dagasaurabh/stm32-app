@@ -18,7 +18,7 @@ set(GPIO_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/gpio/src/gpio.c)
 
 
 #-------- Time Utility Object library ------------
-set(TIME_UTILS_SRCS 
+set(TIME_UTILS_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/src/time/src/systime.c
     ${CMAKE_CURRENT_LIST_DIR}/src/time/src/time_math.c
     ${CMAKE_CURRENT_LIST_DIR}/src/time/src/timer.c
@@ -89,22 +89,21 @@ target_link_libraries(${P}_obj
 # Interface library
 add_library(${P} INTERFACE)
 target_include_directories(${P} INTERFACE
-	${CMAKE_CURRENT_LIST_DIR}/include
-	${SERIAL_UART_INCLUDE_DIR}
-	${GPIO_INCLUDE_DIR}
-	${SPI_INCLUDE_DIR}
-	${I2C_INCLUDE_DIR}
-	${REGMAP_INCLUDE_DIR}
-	${TIME_UTILS_INCLUDE_DIR}
-	${MCU_HAL_INCLUDES}
+    ${CMAKE_CURRENT_LIST_DIR}/include
+    ${SERIAL_UART_INCLUDE_DIR}
+    ${GPIO_INCLUDE_DIR}
+    ${SPI_INCLUDE_DIR}
+    ${I2C_INCLUDE_DIR}
+    ${REGMAP_INCLUDE_DIR}
+    ${TIME_UTILS_INCLUDE_DIR}
+    ${MCU_HAL_INCLUDES}
 )
 
-target_sources(${P} INTERFACE 
-	$<TARGET_OBJECTS:${P}_obj>
-	$<TARGET_OBJECTS:${P}_time_utils_obj>)
+target_sources(${P} INTERFACE
+    $<TARGET_OBJECTS:${P}_obj>
+    $<TARGET_OBJECTS:${P}_time_utils_obj>)
 
 set_property(TARGET ${P}_obj PROPERTY EXCLUDE_FROM_ALL TRUE)
 set_property(TARGET ${P}_time_utils_obj PROPERTY EXCLUDE_FROM_ALL TRUE)
 
 add_subdirectory(src/sensor_mgr)
-
