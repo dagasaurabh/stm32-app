@@ -43,7 +43,10 @@ int main(void)
     regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(HTS221_SLAVE));
     sensor_t  *dev = hts221_init(map);
 
-    if (!dev) printf("HTS221 init failed\r\n");
+    if (!dev) {
+        printf("HTS221 init failed\r\n");
+        while (1) delay_ms(1000);
+    }
 
     while (1) {
         hts221_data_t data = {0};

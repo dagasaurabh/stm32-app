@@ -42,8 +42,10 @@ int main(void)
 
     regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(LPS22HH_SLAVE));
     sensor_t  *dev = lps22hh_init(map);
-    if (!dev)
+    if (!dev) {
         printf("LPS22HH init failed\r\n");
+        while (1) delay_ms(1000);
+    }
 
     while (1) {
         lps22hh_data_t data = {0};
