@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "board.h"
 #include "i2c.h"
 #include "regmap_i2c.h"
 #include "timer.h"
 #include "systime.h"
 #include "ism330dhcx.h"
+#include "pfmt.h"
 
 /* Board-specific I2C configuration
  * ISM330DHCX address is selected by the SA0 pin: SA0=HIGH → 0x6B, SA0=LOW → 0x6A.
@@ -21,8 +23,7 @@
 #  define ISM330DHCX_ADDR   0x6A
 #endif
 
-static regmap_i2c_t  g_map;
-static ism330dhcx_t  g_dev;
+static regmap_i2c_t g_map;
 
 static void delay_ms(uint32_t ms)
 {
@@ -39,16 +40,17 @@ int main(void)
 
     board_i2c_add_slave(ISM330DHCX_BUS, ISM330DHCX_SLAVE, ISM330DHCX_ADDR, I2C_ADDR_7BIT, I2C_SPEED_FAST);
 
-    regmap_i2c_init(&g_map, i2c_open(ISM330DHCX_SLAVE));
-    if (ism330dhcx_init(&g_dev, &g_map.map) < 0)
+    regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(ISM330DHCX_SLAVE));
+    sensor_t  *dev = ism330dhcx_init(map);
+    if (!dev)
         printf("ISM330DHCX init failed\r\n");
 
     while (1) {
-        float ax = 0.0f, ay = 0.0f, az = 0.0f;
-        float gx = 0.0f, gy = 0.0f, gz = 0.0f;
-        ism330dhcx_read(&g_dev, &ax, &ay, &az, &gx, &gy, &gz);
-        printf("A=%.3f %.3f %.3f g   G=%.2f %.2f %.2f dps\r\n",
-               ax, ay, az, gx, gy, gz);
+        ism330dhcx_data_t data = {0};
+        sensor_read_sync(dev, &data);
+        printf("A="); pf3(data.ax); printf(" "); pf3(data.ay); printf(" "); pf3(data.az);
+        printf(" g   G="); pf2(data.gx); printf(" "); pf2(data.gy); printf(" "); pf2(data.gz);
+        printf(" dps\r\n");
         delay_ms(500);
     }
 }

@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "board.h"
 #include "i2c.h"
 #include "regmap_i2c.h"
 #include "timer.h"
 #include "systime.h"
 #include "lps22hh.h"
+#include "pfmt.h"
 
 /* Board-specific I2C configuration
  * LPS22HH address is selected by the SA0 pin: SA0=HIGH → 0x5D, SA0=LOW → 0x5C.
@@ -22,7 +24,6 @@
 #endif
 
 static regmap_i2c_t g_map;
-static lps22hh_t    g_dev;
 
 static void delay_ms(uint32_t ms)
 {
@@ -39,14 +40,16 @@ int main(void)
 
     board_i2c_add_slave(LPS22HH_BUS, LPS22HH_SLAVE, LPS22HH_ADDR, I2C_ADDR_7BIT, I2C_SPEED_FAST);
 
-    regmap_i2c_init(&g_map, i2c_open(LPS22HH_SLAVE));
-    if (lps22hh_init(&g_dev, &g_map.map) < 0)
+    regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(LPS22HH_SLAVE));
+    sensor_t  *dev = lps22hh_init(map);
+    if (!dev)
         printf("LPS22HH init failed\r\n");
 
     while (1) {
-        float p = 0.0f, t = 0.0f;
-        lps22hh_read(&g_dev, &p, &t);
-        printf("P=%.2f hPa  T=%.1f C\r\n", p, t);
+        lps22hh_data_t data = {0};
+        sensor_read_sync(dev, &data);
+        printf("P="); pf2(data.pressure_hpa);
+        printf(" hPa  T="); pf1(data.temp_c); printf(" C\r\n");
         delay_ms(500);
     }
 }

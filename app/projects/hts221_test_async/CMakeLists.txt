@@ -12,6 +12,7 @@ target_link_libraries(${P}.elf
     board_console
     board_i2c
     hts221
+    sensor_mgr
 )
 
 build_app(${P})

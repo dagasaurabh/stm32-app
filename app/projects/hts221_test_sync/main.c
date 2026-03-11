@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "board.h"
 #include "i2c.h"
 #include "regmap_i2c.h"
 #include "timer.h"
 #include "systime.h"
 #include "hts221.h"
+#include "pfmt.h"
 
 /* Board-specific I2C configuration
  * HTS221 has a fixed I2C address (0x5F) — no SA0 pin.
@@ -22,7 +24,6 @@
 #endif
 
 static regmap_i2c_t g_map;
-static hts221_t     g_dev;
 
 static void delay_ms(uint32_t ms)
 {
@@ -39,14 +40,16 @@ int main(void)
 
     board_i2c_add_slave(HTS221_BUS, HTS221_SLAVE, HTS221_ADDR, I2C_ADDR_7BIT, I2C_SPEED_FAST);
 
-    regmap_i2c_init(&g_map, i2c_open(HTS221_SLAVE));
-    if (hts221_init(&g_dev, &g_map.map) < 0)
-        printf("HTS221 init failed\r\n");
+    regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(HTS221_SLAVE));
+    sensor_t  *dev = hts221_init(map);
+
+    if (!dev) printf("HTS221 init failed\r\n");
 
     while (1) {
-        float t = 0.0f, h = 0.0f;
-        hts221_read(&g_dev, &t, &h);
-        printf("T=%.1f C  H=%.1f%%\r\n", t, h);
+        hts221_data_t data = {0};
+        sensor_read_sync(dev, &data);
+        printf("T="); pf1(data.temp_c);
+        printf(" C  H="); pf1(data.humidity_pct); printf("%%\r\n");
         delay_ms(500);
     }
 }

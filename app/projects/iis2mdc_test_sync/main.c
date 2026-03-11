@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "board.h"
 #include "i2c.h"
 #include "regmap_i2c.h"
 #include "timer.h"
 #include "systime.h"
 #include "iis2mdc.h"
+#include "pfmt.h"
 
 /* Board-specific I2C configuration
  * IIS2MDC has a fixed I2C address (0x1E) — no SA0 pin.
@@ -22,7 +24,6 @@
 #endif
 
 static regmap_i2c_t g_map;
-static iis2mdc_t    g_dev;
 
 static void delay_ms(uint32_t ms)
 {
@@ -39,14 +40,16 @@ int main(void)
 
     board_i2c_add_slave(IIS2MDC_BUS, IIS2MDC_SLAVE, IIS2MDC_ADDR, I2C_ADDR_7BIT, I2C_SPEED_FAST);
 
-    regmap_i2c_init(&g_map, i2c_open(IIS2MDC_SLAVE));
-    if (iis2mdc_init(&g_dev, &g_map.map) < 0)
+    regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(IIS2MDC_SLAVE));
+    sensor_t  *dev = iis2mdc_init(map);
+    if (!dev)
         printf("IIS2MDC init failed\r\n");
 
     while (1) {
-        float mx = 0.0f, my = 0.0f, mz = 0.0f;
-        iis2mdc_read(&g_dev, &mx, &my, &mz);
-        printf("M=%.2f %.2f %.2f gauss\r\n", mx, my, mz);
+        iis2mdc_data_t data = {0};
+        sensor_read_sync(dev, &data);
+        printf("M="); pf2(data.mx); printf(" "); pf2(data.my); printf(" "); pf2(data.mz);
+        printf(" gauss\r\n");
         delay_ms(500);
     }
 }
