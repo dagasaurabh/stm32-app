@@ -11,6 +11,16 @@ if(NOT CMAKE_BUILD_TYPE)
         FORCE)
 endif()
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)  # use -std=gnu11, not -std=c11
+
+# undefine NDEBUG to enable assertion
+if((${CMAKE_BUILD_TYPE} MATCHES "Release") OR (${CMAKE_BUILD_TYPE} MATCHES "MinSizeRel"))
+    set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} -UNDEBUG")
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -UNDEBUG")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
     "${CMAKE_CURRENT_SOURCE_DIR}/platform/boards/${BOARD}/cmake"
@@ -47,4 +57,5 @@ add_subdirectory(platform/mcu)
 add_subdirectory(platform/drivers)
 add_subdirectory(platform/common)
 add_subdirectory(platform/boards)
+add_subdirectory(platform/devices)
 add_subdirectory(app)

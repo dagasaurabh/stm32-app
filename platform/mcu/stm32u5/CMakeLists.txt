@@ -26,6 +26,9 @@ target_link_libraries(mcu_core INTERFACE mcu_api)
 target_link_options(${MCU_TOOLCHAIN_LIB} INTERFACE
     --specs=nano.specs
     --specs=nosys.specs
+    # NOTE: -u _printf_float is intentionally omitted.  newlib-nano's %f uses
+    # double precision, pulling _dtoa_r + all __aeabi_d* soft-FP (~14 KB).
+    # Use integer arithmetic with %ld for float output in size-sensitive builds.
 )
 
 add_subdirectory(hal)

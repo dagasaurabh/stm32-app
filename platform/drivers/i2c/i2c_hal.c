@@ -149,7 +149,17 @@ int i2c_hal_master_rx(void *hal, uint16_t addr, uint8_t *buf, uint16_t len)
                 HAL_MAX_DELAY) == HAL_OK) ? 0 : -1;
 }
 
-int i2c_hal_master_seq_tx_it(void *hal, uint16_t addr, uint8_t *buf, uint16_t len, 
+/*
+ * IMPORTANT — same-direction (TX→TX) sequential chaining limitation:
+ * HAL_I2C_Master_Seq_Transmit_IT does not reliably suppress the repeated
+ * START between same-direction segments on STM32L5/U5.  Callers must NOT
+ * split a register-address + data write into two TX calls; instead combine
+ * them into one buffer and call this once with I2C_FIRST_AND_LAST_FRAME.
+ * See i2c_mem_write() in i2c.c for the correct implementation.
+ * TX→RX direction changes (i2c_mem_read) work correctly because the HAL
+ * generates the proper repeated START on direction reversal.
+ */
+int i2c_hal_master_seq_tx_it(void *hal, uint16_t addr, uint8_t *buf, uint16_t len,
         i2c_xfer_opt_t opt, i2c_cb_t cb, void *ctx)
 {
     I2C_HandleTypeDef *h = (I2C_HandleTypeDef *)hal;

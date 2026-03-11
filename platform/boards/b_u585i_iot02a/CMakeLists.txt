@@ -19,9 +19,11 @@ target_include_directories(${P} INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 target_compile_definitions(${P} INTERFACE
+    BOARD_B_U585I_IOT02A
     BOARD_HAS_LED
     BOARD_HAS_BUTTON
     BOARD_HAS_CONSOLE
+    BOARD_HAS_SENSORS
 )
 
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)

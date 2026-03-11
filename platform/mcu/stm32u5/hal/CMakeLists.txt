@@ -12,6 +12,7 @@ add_library(${P}_core_impl OBJECT
     ${HAL_SRC_DIR}/stm32u5xx_hal_rcc.c
     ${HAL_SRC_DIR}/stm32u5xx_hal_rcc_ex.c
     ${HAL_SRC_DIR}/stm32u5xx_hal_cortex.c
+    ${HAL_SRC_DIR}/stm32u5xx_hal_icache.c
 )
 target_link_libraries(${P}_core_impl PRIVATE ${MCU_TOOLCHAIN_LIB} ${MCU_HAL_LIB})
 

@@ -125,6 +125,18 @@ static int board_spi1_recover(void *ctx, uint32_t error_flags)
     return spi_drv_init(drv);
 }
 
+/*
+ * board_spi1_bus_recover — peripheral reset for spi_reset().
+ *
+ * SPI has no electrical bus hang (master owns SCK/CS), so bus_recover is
+ * identical to recover: abort the HAL state machine, DeInit, and Init.
+ * CS is already deasserted by spi_reset() before this is called.
+ */
+static int board_spi1_bus_recover(void *ctx)
+{
+    return board_spi1_recover(ctx, 0);
+}
+
 static const struct spi_bus_ops spi1_bus_ops = {
     .open            = board_spi1_open,
     .close           = board_spi1_close,
@@ -132,6 +144,7 @@ static const struct spi_bus_ops spi1_bus_ops = {
     .transfer_one_it = board_spi1_transfer_one_it,
     .apply_config    = board_spi1_apply_config,
     .recover         = board_spi1_recover,
+    .bus_recover     = board_spi1_bus_recover,
 };
 
 static struct spi_bus spi1_bus = {

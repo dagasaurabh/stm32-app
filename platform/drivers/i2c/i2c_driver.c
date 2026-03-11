@@ -13,15 +13,13 @@ int i2c_drv_deinit(i2c_t *dev)
     return i2c_hal_deinit(dev->hal);
 }
 
-int i2c_drv_transfer_one(i2c_t *dev, uint16_t addr, i2c_dir_t dir, uint8_t *buf,
-        uint16_t len, i2c_xfer_opt_t opt)
+int i2c_drv_transfer_one(i2c_t *dev, uint16_t addr, i2c_dir_t dir,
+        uint8_t *buf, uint16_t len, i2c_xfer_opt_t opt)
 {
     if (!dev || !dev->hal || !buf || len == 0) return -1;
-
-    (void)opt;   /* blocking API always issues START+STOP */
-
+    (void)opt;	/* blocking API always issues START+STOP */
     if (dir == I2C_DIR_WRITE) return i2c_hal_master_tx(dev->hal, addr, buf, len);
-    else return i2c_hal_master_rx(dev->hal, addr, buf, len);
+    else                      return i2c_hal_master_rx(dev->hal, addr, buf, len);
 }
 
 int i2c_drv_transfer_one_it(i2c_t *dev, uint16_t addr, i2c_dir_t dir, 

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include "board_api.h"
 #include "spi.h"
 #include "pinmap.h"

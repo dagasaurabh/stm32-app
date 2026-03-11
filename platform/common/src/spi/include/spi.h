@@ -56,6 +56,15 @@ struct spi_bus_ops {
                            spi_cb_t cb, void *cb_ctx);
     int (*apply_config)(void *ctx, spi_mode_t mode, spi_clkdiv_t prescaler, spi_datasize_t datasize);
     int (*recover)(void *ctx, uint32_t error_flags);
+    /*
+     * bus_recover — peripheral abort + DeInit + Init.
+     *
+     * SPI has no electrical bus hang (master owns SCK/CS), so this is a
+     * pure peripheral state-machine reset.  A CS toggle is not needed
+     * because deasserting CS (driving it high) resets any slave shift
+     * register mid-transaction; the facade already deasserts CS in spi_reset().
+     */
+    int (*bus_recover)(void *ctx);
 };
 
 /* A SPI hardware controller */
@@ -107,3 +116,12 @@ int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /* spi_poll -  needs to be called explicitly when using spi in async mode */
 void spi_poll(void);
+
+/*
+ * spi_reset — abort in-flight and queued transfers, deassert CS, recover bus.
+ *
+ * All discarded messages have complete() called with SPI_EVT_ERROR so async
+ * callers unblock.  Must NOT be called from ISR context.
+ * Returns 0 on success, -1 if fd is invalid.
+ */
+int spi_reset(int fd);
