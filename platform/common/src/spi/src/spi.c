@@ -22,8 +22,7 @@
 #include "spi.h"
 #include "gpio.h"
 #include <string.h>
-#include "cmsis_compiler.h"  /* __get_PRIMASK, __set_PRIMASK, __disable_irq */
-#include "cmsis_gcc.h"
+#include "platform_barrier.h"
 #include "timer.h"
 #include <assert.h>
 
@@ -108,14 +107,14 @@ static spi_bus_state_t bus_state[SPI_MAX_BUSES];
  */
 static inline uint32_t spi_enter_critical(void)
 {
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    return primask;
+    uint32_t state;
+    PLATFORM_IRQ_SAVE(state);
+    return state;
 }
 
-static inline void spi_exit_critical(uint32_t primask)
+static inline void spi_exit_critical(uint32_t state)
 {
-    __set_PRIMASK(primask);
+    PLATFORM_IRQ_RESTORE(state);
 }
 
 static int s_get_bus_idx_by_name(const char * name) {
@@ -286,7 +285,7 @@ static void spi_sync_cb(void *ctx, spi_evt_t event, uint32_t error_flags)
 
 int spi_sync(int fd, struct spi_message *msg)
 {
-    if (__get_IPSR() != 0) return -1;
+    if (PLATFORM_IN_ISR()) return -1;
     if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
     if (!msg || !msg->transfers) return -1;
 
@@ -512,7 +511,7 @@ static void s_apply_config(spi_bus_state_t *st)
 int spi_async(int fd, struct spi_message *msg)
 {
     /* Can not be called from ISR context */
-    if (__get_IPSR() != 0) return -1;
+    if (PLATFORM_IN_ISR()) return -1;
 
     if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
     if (!msg || !msg->transfers || !msg->complete) return -1;
@@ -603,6 +602,75 @@ int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len)
     spi_message_init(&msg);
     spi_message_add_transfer(&msg, &xfer);
     return spi_sync(fd, &msg);
+}
+
+/*
+ * spi_reset — abort in-flight and queued transfers, deassert CS, recover bus.
+ *
+ * Steps:
+ *   1. Locate bus by scanning for the slave's bus_name (cold path — recovery
+ *      is infrequent, so no cached bus index is needed here).
+ *   2. Under critical section: snapshot active + queued messages, wipe state.
+ *   3. Deassert CS of the active slave (if any) to reset its shift register.
+ *   4. bus_recover (peripheral DeInit+Init) or recover (abort+reinit).
+ *   5. Fire complete() on all discarded messages with SPI_ERR_ABORT.
+ */
+int spi_reset(int fd)
+{
+    if (fd < 0 || fd >= SPI_MAX_SLAVES || !fd_table[fd]) return -1;
+
+    struct spi_slave *slave = fd_table[fd];
+    int bus_idx = s_get_bus_idx_by_name(slave->bus_name);
+    if (bus_idx < 0) return -1;
+
+    spi_bus_state_t *st  = &bus_state[bus_idx];
+    struct spi_bus  *bus = bus_table[bus_idx];
+
+    /* ----- Critical section: snapshot + wipe state ----- */
+    uint32_t irq_state = spi_enter_critical();
+
+    struct spi_message *active_msg    = st->msg;
+    struct spi_slave   *active_slave  = st->slave;
+    spi_queued_t        queue_copy[SPI_ASYNC_QUEUE_DEPTH];
+    uint8_t             q_count = st->q_count;
+
+    for (int i = 0; i < q_count; i++)
+        queue_copy[i] = st->queue[(st->q_head + i) % SPI_ASYNC_QUEUE_DEPTH];
+
+    st->msg             = NULL;
+    st->current         = NULL;
+    st->slave           = NULL;
+    st->status          = SPI_BUS_IDLE;
+    st->error_flags     = 0;
+    st->q_head          = 0;
+    st->q_tail          = 0;
+    st->q_count         = 0;
+    st->needs_recovery  = false;
+    st->recovery_flags  = 0;
+
+    spi_exit_critical(irq_state);
+
+    /* ----- Deassert CS of the interrupted slave ----- */
+    if (active_slave)
+        gpio_write(active_slave->cs_pin, GPIO_HIGH);
+
+    /* ----- Hardware recovery ----- */
+    if (bus->ops->bus_recover)
+        bus->ops->bus_recover(bus->ctx);
+    else if (bus->ops->recover)
+        bus->ops->recover(bus->ctx, 0);
+
+    /* ----- Notify discarded messages ----- */
+    if (active_msg && active_msg->complete)
+        active_msg->complete(active_msg->context, SPI_EVT_ERROR, SPI_ERR_ABORT);
+
+    for (int i = 0; i < q_count; i++) {
+        struct spi_message *qmsg = queue_copy[i].msg;
+        if (qmsg && qmsg->complete)
+            qmsg->complete(qmsg->context, SPI_EVT_ERROR, SPI_ERR_ABORT);
+    }
+
+    return 0;
 }
 
 void spi_poll(void)
