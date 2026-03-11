@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include "gpio.h"
 #include "pinmap.h"
 #include "board_api.h"
