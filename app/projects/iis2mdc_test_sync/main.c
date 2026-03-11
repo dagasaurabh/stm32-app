@@ -42,8 +42,10 @@ int main(void)
 
     regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(IIS2MDC_SLAVE));
     sensor_t  *dev = iis2mdc_init(map);
-    if (!dev)
+    if (!dev) {
         printf("IIS2MDC init failed\r\n");
+        while (1) delay_ms(1000);
+    }
 
     while (1) {
         iis2mdc_data_t data = {0};

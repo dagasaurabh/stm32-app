@@ -42,8 +42,10 @@ int main(void)
 
     regmap_t  *map = regmap_i2c_init(&g_map, i2c_open(ISM330DHCX_SLAVE));
     sensor_t  *dev = ism330dhcx_init(map);
-    if (!dev)
+    if (!dev) {
         printf("ISM330DHCX init failed\r\n");
+        while (1) delay_ms(1000);
+    }
 
     while (1) {
         ism330dhcx_data_t data = {0};

@@ -81,12 +81,25 @@ int main(void)
     g_bus.n_sensors = 1;
 
     sensor_t *sensor = hts221_init(regmap_i2c_init(&g_map, g_bus.fd));
-    if (!sensor) printf("HTS221 init failed\r\n");
+    if (!sensor) {
+        printf("HTS221 init failed\r\n");
+        while (1) {}
+    }
 
     int h = sensor_mgr_register(SENSOR_HTS221, sensor, 100, 1);
+    if (h < 0) {
+        printf("sensor_mgr_register failed: %d\r\n", h);
+        while (1) {}
+    }
     g_bus.sensors[0] = (bus_sensor_t){ .bus = &g_bus, .handle = h };
-    sensor_mgr_subscribe(h, on_hts221_data, &g_bus.sensors[0]);
-    sensor_mgr_stream_start(h);
+    if (sensor_mgr_subscribe(h, on_hts221_data, &g_bus.sensors[0]) < 0) {
+        printf("sensor_mgr_subscribe failed\r\n");
+        while (1) {}
+    }
+    if (sensor_mgr_stream_start(h) < 0) {
+        printf("sensor_mgr_stream_start failed\r\n");
+        while (1) {}
+    }
 
     while (1) {
         i2c_poll();
