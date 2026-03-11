@@ -42,10 +42,10 @@ set(I2C_SRCS ${CMAKE_CURRENT_LIST_DIR}/src/i2c/src/i2c.c)
 
 #---------------- Regmap -------------------------
 
-set(REGMAP_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/regmap)
+set(REGMAP_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/src/regmap/include)
 set(REGMAP_SRCS
-    ${CMAKE_CURRENT_LIST_DIR}/src/regmap/regmap_i2c.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/regmap/regmap_spi.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/regmap/src/regmap_i2c.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/regmap/src/regmap_spi.c
 )
 
 #-------------------------------------------------
@@ -96,6 +96,7 @@ target_include_directories(${P} INTERFACE
 	${I2C_INCLUDE_DIR}
 	${REGMAP_INCLUDE_DIR}
 	${TIME_UTILS_INCLUDE_DIR}
+	${MCU_HAL_INCLUDES}
 )
 
 target_sources(${P} INTERFACE 
@@ -104,4 +105,6 @@ target_sources(${P} INTERFACE
 
 set_property(TARGET ${P}_obj PROPERTY EXCLUDE_FROM_ALL TRUE)
 set_property(TARGET ${P}_time_utils_obj PROPERTY EXCLUDE_FROM_ALL TRUE)
+
+add_subdirectory(src/sensor_mgr)
 
