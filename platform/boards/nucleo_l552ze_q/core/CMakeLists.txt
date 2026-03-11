@@ -15,9 +15,8 @@ target_link_libraries(${P}_obj
 
 # Interface library
 add_library(${P} INTERFACE)
-target_link_libraries(${P} INTERFACE 
-	board_common 
-	platform_common 
-	gpio_driver)
+target_link_libraries(${P} INTERFACE
+    board_common
+    platform_common
+    gpio_driver)
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)
-

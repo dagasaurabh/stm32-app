@@ -12,22 +12,22 @@ set(MCU_FLOAT_ABI hard)
 set(MCU_CPU_FLAGS
     -mcpu=${MCU_CPU}
     -mthumb
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
 set(MCU_ABI_FLAGS
     -mfloat-abi=${MCU_FLOAT_ABI}
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
 set(MCU_FPU_FLAGS
     -mfpu=${MCU_FPU}
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
@@ -35,8 +35,8 @@ set(MCU_TRUSTZONE OFF)
 
 set(LINKER_DIR
     ${CMAKE_SOURCE_DIR}/platform/boards/nucleo_l552ze_q/linker
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
@@ -51,8 +51,8 @@ set(MCU_LINKER_SCRIPT ${LINKER_DIR}/flash.ld)
 set(MCU_DEFINES
     ${MCU_VARIANT}
     USE_HAL_DRIVER
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
@@ -64,16 +64,16 @@ set(MCU_COMPILE_OPTIONS
     ${MCU_CPU_FLAGS}
     ${MCU_FPU_FLAGS}
     ${MCU_ABI_FLAGS}
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 
 set(MCU_LINK_OPTIONS
     ${MCU_COMPILE_OPTIONS}
     -T${MCU_LINKER_SCRIPT}
-    CACHE 
-    INTERNAL 
+    CACHE
+    INTERNAL
     ""
 )
 

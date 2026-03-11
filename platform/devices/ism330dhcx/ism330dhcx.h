@@ -21,9 +21,11 @@
 #define ISM330DHCX_MAX_DEVICES 1
 #endif
 
-typedef struct {
-    float ax, ay, az;   /* g   — 0.000061 g/LSB at ±2g  */
-    float gx, gy, gz;   /* dps — 0.00875 dps/LSB at 250 dps */
+typedef struct
+{
+    float ax, ay, az; /* g   — 0.000061 g/LSB at ±2g  */
+    float gx, gy, gz; /* dps — 0.00875 dps/LSB at 250 dps */
 } ism330dhcx_data_t;
 
-sensor_t *ism330dhcx_init(regmap_t *map);
+sensor_t *
+ism330dhcx_init(regmap_t *map);

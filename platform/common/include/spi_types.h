@@ -18,11 +18,12 @@
  * the whole message succeeded; SPI_EVT_ERROR means at least one
  * transfer failed (inspect error_flags for the cause).
  */
-typedef enum {
-    SPI_EVT_TX_DONE   = 0,  /* transmit-only transfer complete  */
-    SPI_EVT_RX_DONE   = 1,  /* receive-only transfer complete   */
-    SPI_EVT_TXRX_DONE = 2,  /* full-duplex transfer complete    */
-    SPI_EVT_ERROR     = 3,  /* transfer failed; see error_flags */
+typedef enum
+{
+    SPI_EVT_TX_DONE = 0,   /* transmit-only transfer complete  */
+    SPI_EVT_RX_DONE = 1,   /* receive-only transfer complete   */
+    SPI_EVT_TXRX_DONE = 2, /* full-duplex transfer complete    */
+    SPI_EVT_ERROR = 3,     /* transfer failed; see error_flags */
 } spi_evt_t;
 
 /*
@@ -33,13 +34,13 @@ typedef enum {
  *
  * Non-zero only when event == SPI_EVT_ERROR.
  */
-#define SPI_ERR_NONE  0x00U  /* no error                          */
-#define SPI_ERR_MODF  0x01U  /* mode fault (SS low in master mode) */
-#define SPI_ERR_CRC   0x02U  /* CRC mismatch                      */
-#define SPI_ERR_OVR   0x04U  /* overrun (data lost)               */
-#define SPI_ERR_FRE   0x08U  /* frame format error                */
-#define SPI_ERR_DMA   0x10U  /* DMA transfer error                */
-#define SPI_ERR_ABORT 0x20U  /* transfer discarded by spi_reset() */
+#define SPI_ERR_NONE 0x00U  /* no error                          */
+#define SPI_ERR_MODF 0x01U  /* mode fault (SS low in master mode) */
+#define SPI_ERR_CRC 0x02U   /* CRC mismatch                      */
+#define SPI_ERR_OVR 0x04U   /* overrun (data lost)               */
+#define SPI_ERR_FRE 0x08U   /* frame format error                */
+#define SPI_ERR_DMA 0x10U   /* DMA transfer error                */
+#define SPI_ERR_ABORT 0x20U /* transfer discarded by spi_reset() */
 
 /*
  * spi_cb_t — universal SPI completion callback.
@@ -52,19 +53,22 @@ typedef enum {
  */
 typedef void (*spi_cb_t)(void *ctx, spi_evt_t event, uint32_t error_flags);
 
-typedef enum {
-    SPI_MODE_0 = 0,  /* CPOL=0, CPHA=0 */
-    SPI_MODE_1,      /* CPOL=0, CPHA=1 */
-    SPI_MODE_2,      /* CPOL=1, CPHA=0 */
-    SPI_MODE_3       /* CPOL=1, CPHA=1 */
+typedef enum
+{
+    SPI_MODE_0 = 0, /* CPOL=0, CPHA=0 */
+    SPI_MODE_1,     /* CPOL=0, CPHA=1 */
+    SPI_MODE_2,     /* CPOL=1, CPHA=0 */
+    SPI_MODE_3      /* CPOL=1, CPHA=1 */
 } spi_mode_t;
 
-typedef enum {
-    SPI_DATASIZE_8  = 8,
+typedef enum
+{
+    SPI_DATASIZE_8 = 8,
     SPI_DATASIZE_16 = 16
 } spi_datasize_t;
 
-typedef enum {
+typedef enum
+{
     SPI_CLKDIV_2,
     SPI_CLKDIV_4,
     SPI_CLKDIV_8,

@@ -33,27 +33,31 @@ typedef void (*regmap_cb_t)(void *ctx, int status);
  *
  *   regmap_i2c_t *r = (regmap_i2c_t *)map;   // valid: base is first member
  */
-typedef struct regmap_s {
-    int (*read) (struct regmap_s *map, uint8_t reg, uint8_t *buf, uint16_t len);
-    int (*write) (struct regmap_s *map, uint8_t reg, const uint8_t *buf, uint16_t len);
-    int (*read_async)(struct regmap_s *map, uint8_t reg, uint8_t *buf, uint16_t len,
-            regmap_cb_t cb, void *cb_ctx);
+typedef struct regmap_s
+{
+    int (*read)(struct regmap_s *map, uint8_t reg, uint8_t *buf, uint16_t len);
+    int (*write)(struct regmap_s *map, uint8_t reg, const uint8_t *buf, uint16_t len);
+    int (*read_async)(struct regmap_s *map, uint8_t reg, uint8_t *buf, uint16_t len, regmap_cb_t cb,
+                      void *cb_ctx);
 } regmap_t;
 
 /* Inline wrappers */
 
-static inline int regmap_read(regmap_t *m, uint8_t reg, uint8_t *buf, uint16_t len)
+static inline int
+regmap_read(regmap_t *m, uint8_t reg, uint8_t *buf, uint16_t len)
 {
     return m->read(m, reg, buf, len);
 }
 
-static inline int regmap_write(regmap_t *m, uint8_t reg, const uint8_t *buf, uint16_t len)
+static inline int
+regmap_write(regmap_t *m, uint8_t reg, const uint8_t *buf, uint16_t len)
 {
     return m->write(m, reg, buf, len);
 }
 
-static inline int regmap_read_async(regmap_t *m, uint8_t reg, uint8_t *buf, uint16_t len,
-        regmap_cb_t cb, void *cb_ctx)
+static inline int
+regmap_read_async(regmap_t *m, uint8_t reg, uint8_t *buf, uint16_t len, regmap_cb_t cb,
+                  void *cb_ctx)
 {
     return m->read_async(m, reg, buf, len, cb, cb_ctx);
 }

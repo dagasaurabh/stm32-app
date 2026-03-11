@@ -19,10 +19,10 @@
 #include "timer.h"
 #include <assert.h>
 
-#define I2C_MAX_BUSES   4
-#define I2C_MAX_SLAVES  8
+#define I2C_MAX_BUSES 4
+#define I2C_MAX_SLAVES 8
 
-static struct i2c_bus   *bus_table[I2C_MAX_BUSES];
+static struct i2c_bus *bus_table[I2C_MAX_BUSES];
 static struct i2c_slave *slave_table[I2C_MAX_SLAVES];
 
 /*
@@ -32,57 +32,64 @@ static struct i2c_slave *slave_table[I2C_MAX_SLAVES];
  * i2c_async() can go directly to the bus state without a strcmp scan on
  * every transfer.  bus/bus_idx are set once at open and never change.
  */
-typedef struct {
+typedef struct
+{
     struct i2c_slave *slave;
-    struct i2c_bus   *bus;
-    int               bus_idx;
+    struct i2c_bus *bus;
+    int bus_idx;
 } i2c_fd_entry_t;
 
 static i2c_fd_entry_t fd_table[I2C_MAX_SLAVES];
 
-static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags);
-static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags);
+static void
+i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags);
+static void
+s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags);
 
-struct i2c_sync_ctx {
-    volatile int        done;
-    volatile i2c_evt_t  event;
-    volatile uint32_t   error_flags;
+struct i2c_sync_ctx
+{
+    volatile int done;
+    volatile i2c_evt_t event;
+    volatile uint32_t error_flags;
 };
 
-typedef struct {
-    int                fd;
+typedef struct
+{
+    int fd;
     struct i2c_message *msg;
 } i2c_queued_t;
 
 #define I2C_ASYNC_QUEUE_DEPTH 4
 
-typedef enum {
+typedef enum
+{
     I2C_BUS_IDLE = 0,
     I2C_BUS_ACTIVE
 } i2c_bus_status_t;
 
-typedef struct {
+typedef struct
+{
     i2c_bus_status_t status;
 
     /* Active transfer */
-    struct i2c_slave    *slave;
-    struct i2c_bus      *bus;
-    struct i2c_message  *msg;          /* NULL = idle */
+    struct i2c_slave *slave;
+    struct i2c_bus *bus;
+    struct i2c_message *msg; /* NULL = idle */
     struct i2c_transfer *current;
-    uint32_t             error_flags;
+    uint32_t error_flags;
 
     /* Pending message queue (ring buffer) */
-    i2c_queued_t  queue[I2C_ASYNC_QUEUE_DEPTH];
-    uint8_t       q_head;
-    uint8_t       q_tail;
-    uint8_t       q_count;
+    i2c_queued_t queue[I2C_ASYNC_QUEUE_DEPTH];
+    uint8_t q_head;
+    uint8_t q_tail;
+    uint8_t q_count;
 
     /* Active configuration cache */
-    i2c_speed_t      current_speed;
-    i2c_addr_mode_t  current_addr_mode;
+    i2c_speed_t current_speed;
+    i2c_addr_mode_t current_addr_mode;
 
-    volatile bool     needs_recovery;
-    volatile bool     needs_bus_recovery;
+    volatile bool needs_recovery;
+    volatile bool needs_bus_recovery;
     volatile uint32_t recovery_flags;
 } i2c_bus_state_t;
 
@@ -92,14 +99,16 @@ static i2c_bus_state_t bus_state[I2C_MAX_BUSES];
 /* Critical section helpers                                             */
 /* ------------------------------------------------------------------ */
 
-static inline uint32_t i2c_enter_critical(void)
+static inline uint32_t
+i2c_enter_critical(void)
 {
     uint32_t state;
     PLATFORM_IRQ_SAVE(state);
     return state;
 }
 
-static inline void i2c_exit_critical(uint32_t state)
+static inline void
+i2c_exit_critical(uint32_t state)
 {
     PLATFORM_IRQ_RESTORE(state);
 }
@@ -108,10 +117,13 @@ static inline void i2c_exit_critical(uint32_t state)
 /* Internal helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-static int s_get_bus_idx_by_name(const char *name)
+static int
+s_get_bus_idx_by_name(const char *name)
 {
-    for (int i = 0; i < I2C_MAX_BUSES; i++) {
-        if (bus_table[i] && strcmp(bus_table[i]->name, name) == 0) return i;
+    for (int i = 0; i < I2C_MAX_BUSES; i++)
+    {
+        if (bus_table[i] && strcmp(bus_table[i]->name, name) == 0)
+            return i;
     }
     return -1;
 }
@@ -122,27 +134,33 @@ static int s_get_bus_idx_by_name(const char *name)
  * Called for each transfer just before it is submitted to the driver.
  * xfer must be non-NULL; msg->transfers must be non-NULL.
  */
-static i2c_xfer_opt_t get_xfer_options(const struct i2c_message *msg,
-                                        const struct i2c_transfer *xfer)
+static i2c_xfer_opt_t
+get_xfer_options(const struct i2c_message *msg, const struct i2c_transfer *xfer)
 {
     bool is_first = (xfer == msg->transfers);
-    bool is_last  = (xfer->next == NULL);
+    bool is_last = (xfer->next == NULL);
 
-    if (is_first && is_last)  return I2C_XFER_FIRST_AND_LAST;
-    if (is_first)             return I2C_XFER_FIRST;
-    if (is_last)              return I2C_XFER_LAST;
+    if (is_first && is_last)
+        return I2C_XFER_FIRST_AND_LAST;
+    if (is_first)
+        return I2C_XFER_FIRST;
+    if (is_last)
+        return I2C_XFER_LAST;
     return I2C_XFER_NEXT;
 }
 
-static void s_recover(i2c_bus_state_t *st)
+static void
+s_recover(i2c_bus_state_t *st)
 {
-    if (st->needs_bus_recovery) {
+    if (st->needs_bus_recovery)
+    {
         if (st->bus->ops->bus_recover)
             st->bus->ops->bus_recover(st->bus->ctx);
         st->needs_bus_recovery = false;
     }
 
-    if (st->needs_recovery) {
+    if (st->needs_recovery)
+    {
         if (st->bus->ops->recover)
             st->bus->ops->recover(st->bus->ctx, st->recovery_flags);
         st->needs_recovery = false;
@@ -154,32 +172,41 @@ static void s_recover(i2c_bus_state_t *st)
 /* Registration                                                         */
 /* ------------------------------------------------------------------ */
 
-int i2c_bus_register(struct i2c_bus *bus)
+int
+i2c_bus_register(struct i2c_bus *bus)
 {
-    if (!bus || !bus->ops || !bus->name) return -1;
+    if (!bus || !bus->ops || !bus->name)
+        return -1;
 
-    for (int i = 0; i < I2C_MAX_BUSES; i++) {
-        if (!bus_table[i]) {
+    for (int i = 0; i < I2C_MAX_BUSES; i++)
+    {
+        if (!bus_table[i])
+        {
             bus_table[i] = bus;
-            if (bus->ops->open) bus->ops->open(bus->ctx);
+            if (bus->ops->open)
+                bus->ops->open(bus->ctx);
 
             i2c_bus_state_t *st = &bus_state[i];
             memset(st, 0, sizeof(*st));
-            st->status             = I2C_BUS_IDLE;
-            st->current_speed      = (i2c_speed_t)-1;
-            st->current_addr_mode  = (i2c_addr_mode_t)-1;
+            st->status = I2C_BUS_IDLE;
+            st->current_speed = (i2c_speed_t)-1;
+            st->current_addr_mode = (i2c_addr_mode_t)-1;
             return 0;
         }
     }
     return -1;
 }
 
-int i2c_slave_register(struct i2c_slave *slave)
+int
+i2c_slave_register(struct i2c_slave *slave)
 {
-    if (!slave || !slave->name || !slave->bus_name) return -1;
+    if (!slave || !slave->name || !slave->bus_name)
+        return -1;
 
-    for (int i = 0; i < I2C_MAX_SLAVES; i++) {
-        if (!slave_table[i]) {
+    for (int i = 0; i < I2C_MAX_SLAVES; i++)
+    {
+        if (!slave_table[i])
+        {
             slave_table[i] = slave;
             return 0;
         }
@@ -191,38 +218,47 @@ int i2c_slave_register(struct i2c_slave *slave)
 /* Open / Close                                                         */
 /* ------------------------------------------------------------------ */
 
-static int s_find_open_slave(const char *slave_name)
+static int
+s_find_open_slave(const char *slave_name)
 {
-    for (int fd = 0; fd < I2C_MAX_SLAVES; fd++) {
+    for (int fd = 0; fd < I2C_MAX_SLAVES; fd++)
+    {
         if (fd_table[fd].slave && strcmp(fd_table[fd].slave->name, slave_name) == 0)
             return fd;
     }
     return -1;
 }
 
-int i2c_open(const char *slave_name)
+int
+i2c_open(const char *slave_name)
 {
-    if (!slave_name) return -1;
+    if (!slave_name)
+        return -1;
 
-    for (int s = 0; s < I2C_MAX_SLAVES; s++) {
+    for (int s = 0; s < I2C_MAX_SLAVES; s++)
+    {
         if (!slave_table[s] || strcmp(slave_table[s]->name, slave_name) != 0)
             continue;
 
         /* Return existing fd if already open */
         int rc = s_find_open_slave(slave_name);
-        if (rc >= 0) return rc;
+        if (rc >= 0)
+            return rc;
 
         /* Resolve bus once at open time — cached for the lifetime of this fd.
          * PRECONDITION: bus must already be registered (i2c_bus_register) before
          * i2c_open is called.  In practice: board_i2c_init() before i2c_open(). */
         int bus_idx = s_get_bus_idx_by_name(slave_table[s]->bus_name);
-        assert(bus_idx >= 0);   /* bus not registered — call board_i2c_init() first */
-        if (bus_idx < 0) return -1;
+        assert(bus_idx >= 0); /* bus not registered — call board_i2c_init() first */
+        if (bus_idx < 0)
+            return -1;
 
-        for (int fd = 0; fd < I2C_MAX_SLAVES; fd++) {
-            if (!fd_table[fd].slave) {
-                fd_table[fd].slave   = slave_table[s];
-                fd_table[fd].bus     = bus_table[bus_idx];
+        for (int fd = 0; fd < I2C_MAX_SLAVES; fd++)
+        {
+            if (!fd_table[fd].slave)
+            {
+                fd_table[fd].slave = slave_table[s];
+                fd_table[fd].bus = bus_table[bus_idx];
                 fd_table[fd].bus_idx = bus_idx;
                 return fd;
             }
@@ -232,29 +268,35 @@ int i2c_open(const char *slave_name)
     return -1;
 }
 
-int i2c_close(int fd)
+int
+i2c_close(int fd)
 {
-    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave) return -1;
+    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave)
+        return -1;
 
     uint32_t irq_state = i2c_enter_critical();
     struct i2c_slave *slave = fd_table[fd].slave;
 
-    for (int i = 0; i < I2C_MAX_BUSES; i++) {
-        if (bus_state[i].msg && bus_state[i].slave == slave) {
+    for (int i = 0; i < I2C_MAX_BUSES; i++)
+    {
+        if (bus_state[i].msg && bus_state[i].slave == slave)
+        {
             i2c_exit_critical(irq_state);
-            return -1;   /* active */
+            return -1; /* active */
         }
-        for (int q = 0; q < bus_state[i].q_count; q++) {
+        for (int q = 0; q < bus_state[i].q_count; q++)
+        {
             int idx = (bus_state[i].q_head + q) % I2C_ASYNC_QUEUE_DEPTH;
-            if (fd_table[bus_state[i].queue[idx].fd].slave == slave) {
+            if (fd_table[bus_state[i].queue[idx].fd].slave == slave)
+            {
                 i2c_exit_critical(irq_state);
-                return -1;   /* queued */
+                return -1; /* queued */
             }
         }
     }
 
-    fd_table[fd].slave   = NULL;
-    fd_table[fd].bus     = NULL;
+    fd_table[fd].slave = NULL;
+    fd_table[fd].bus = NULL;
     fd_table[fd].bus_idx = -1;
     i2c_exit_critical(irq_state);
     return 0;
@@ -264,27 +306,34 @@ int i2c_close(int fd)
 /* Message API                                                          */
 /* ------------------------------------------------------------------ */
 
-void i2c_message_init(struct i2c_message *msg)
+void
+i2c_message_init(struct i2c_message *msg)
 {
-    if(!msg) return;
+    if (!msg)
+        return;
 
     msg->transfers = NULL;
-    msg->tail      = NULL;
-    msg->complete  = NULL;
-    msg->context   = NULL;
+    msg->tail = NULL;
+    msg->complete = NULL;
+    msg->context = NULL;
 }
 
-void i2c_message_add_transfer(struct i2c_message *msg, struct i2c_transfer *xfer)
+void
+i2c_message_add_transfer(struct i2c_message *msg, struct i2c_transfer *xfer)
 {
-    if(!msg || !xfer) return;
+    if (!msg || !xfer)
+        return;
 
     xfer->next = NULL;
-    if (!msg->tail) {
+    if (!msg->tail)
+    {
         msg->transfers = xfer;
-        msg->tail      = xfer;
-    } else {
+        msg->tail = xfer;
+    }
+    else
+    {
         msg->tail->next = xfer;
-        msg->tail       = xfer;
+        msg->tail = xfer;
     }
 }
 
@@ -292,31 +341,37 @@ void i2c_message_add_transfer(struct i2c_message *msg, struct i2c_transfer *xfer
 /* Sync                                                                 */
 /* ------------------------------------------------------------------ */
 
-static void i2c_sync_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
+static void
+i2c_sync_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 {
     struct i2c_sync_ctx *s = ctx;
-    s->event       = event;
+    s->event = event;
     s->error_flags = error_flags;
-    s->done        = 1;
+    s->done = 1;
 }
 
-int i2c_sync(int fd, struct i2c_message *msg)
+int
+i2c_sync(int fd, struct i2c_message *msg)
 {
-    if (PLATFORM_IN_ISR()) return -1;
-    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave) return -1;
-    if (!msg || !msg->transfers) return -1;
+    if (PLATFORM_IN_ISR())
+        return -1;
+    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave)
+        return -1;
+    if (!msg || !msg->transfers)
+        return -1;
 
     struct i2c_sync_ctx sync_ctx = {0};
 
-    i2c_cb_t user_cb  = msg->complete;
-    void    *user_ctx = msg->context;
+    i2c_cb_t user_cb = msg->complete;
+    void *user_ctx = msg->context;
 
     msg->complete = i2c_sync_cb;
-    msg->context  = &sync_ctx;
+    msg->context = &sync_ctx;
 
-    if (i2c_async(fd, msg) < 0) {
+    if (i2c_async(fd, msg) < 0)
+    {
         msg->complete = user_cb;
-        msg->context  = user_ctx;
+        msg->context = user_ctx;
         return -1;
     }
 
@@ -326,26 +381,29 @@ int i2c_sync(int fd, struct i2c_message *msg)
     i2c_bus_state_t *st = &bus_state[fd_table[fd].bus_idx];
     bool timed_out = false;
 
-    while (!sync_ctx.done) {
+    while (!sync_ctx.done)
+    {
         i2c_poll();
-        if (!timed_out && mstimer_expired(&timer)) {
+        if (!timed_out && mstimer_expired(&timer))
+        {
             st->needs_recovery = true;
             s_recover(st);
 
-            st->msg     = NULL;
+            st->msg = NULL;
             st->current = NULL;
-            st->status  = I2C_BUS_IDLE;
+            st->status = I2C_BUS_IDLE;
 
             sync_ctx.event = I2C_EVT_ERROR;
-            sync_ctx.done  = 1;
+            sync_ctx.done = 1;
             timed_out = true;
         }
     }
 
     msg->complete = user_cb;
-    msg->context  = user_ctx;
+    msg->context = user_ctx;
 
-    if (timed_out || sync_ctx.event != I2C_EVT_DONE) return -1;
+    if (timed_out || sync_ctx.event != I2C_EVT_DONE)
+        return -1;
     return 0;
 }
 
@@ -353,20 +411,15 @@ int i2c_sync(int fd, struct i2c_message *msg)
 /* Async (interrupt-driven) with per-bus message queue                 */
 /* ------------------------------------------------------------------ */
 
-static int i2c_start_transfer(i2c_bus_state_t *st)
+static int
+i2c_start_transfer(i2c_bus_state_t *st)
 {
     i2c_xfer_opt_t opt = get_xfer_options(st->msg, st->current);
 
-    return st->bus->ops->transfer_one_it(
-        st->bus->ctx,
-        st->slave->addr << 1,     /* HAL uses 8-bit shifted address */
-        st->current->dir,
-        st->current->buf,
-        st->current->len,
-        opt,
-        st->current->use_dma,
-        i2c_async_irq_cb,
-        st);
+    return st->bus->ops->transfer_one_it(st->bus->ctx,
+                                         st->slave->addr << 1, /* HAL uses 8-bit shifted address */
+                                         st->current->dir, st->current->buf, st->current->len, opt,
+                                         st->current->use_dma, i2c_async_irq_cb, st);
 }
 
 /*
@@ -375,20 +428,26 @@ static int i2c_start_transfer(i2c_bus_state_t *st)
  * Within a message: chains next i2c_transfer.
  * End of message : fires user callback, then starts next queued message.
  */
-static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
+static void
+i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 {
     i2c_bus_state_t *st = (i2c_bus_state_t *)ctx;
 
-    if (!st || !st->msg || !st->current) {
+    if (!st || !st->msg || !st->current)
+    {
         return;
     }
 
-    if (event == I2C_EVT_ERROR) {
+    if (event == I2C_EVT_ERROR)
+    {
         st->error_flags |= error_flags;
 
-        if (error_flags & (I2C_ERR_BERR | I2C_ERR_ARLO | I2C_ERR_DMA)) {
+        if (error_flags & (I2C_ERR_BERR | I2C_ERR_ARLO | I2C_ERR_DMA))
+        {
             st->needs_bus_recovery = true;
-        } else {
+        }
+        else
+        {
             st->needs_recovery = true;
         }
         st->recovery_flags = error_flags;
@@ -396,9 +455,11 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
 
     st->current = st->current->next;
 
-    if (st->current && st->error_flags == 0) {
+    if (st->current && st->error_flags == 0)
+    {
         /* More transfers remain in this message — continue */
-        if (i2c_start_transfer(st) == 0) {
+        if (i2c_start_transfer(st) == 0)
+        {
             return;
         }
 
@@ -408,113 +469,132 @@ static void i2c_async_irq_cb(void *ctx, i2c_evt_t event, uint32_t error_flags)
     }
 
     /* ----- Message complete ----- */
-    i2c_cb_t  complete  = st->msg->complete;
-    void     *context   = st->msg->context;
+    i2c_cb_t complete = st->msg->complete;
+    void *context = st->msg->context;
     i2c_evt_t final_evt = (st->error_flags == 0) ? I2C_EVT_DONE : I2C_EVT_ERROR;
-    uint32_t  final_err = st->error_flags;
+    uint32_t final_err = st->error_flags;
 
-    if (st->q_count > 0) {
-        i2c_queued_t next        = st->queue[st->q_head];
+    if (st->q_count > 0)
+    {
+        i2c_queued_t next = st->queue[st->q_head];
         struct i2c_slave *next_slave = fd_table[next.fd].slave;
 
-        bool config_change =
-            (st->current_speed     != next_slave->speed) ||
-            (st->current_addr_mode != next_slave->addr_mode);
+        bool config_change = (st->current_speed != next_slave->speed) ||
+                             (st->current_addr_mode != next_slave->addr_mode);
 
-        if (st->needs_recovery || st->needs_bus_recovery || config_change) {
+        if (st->needs_recovery || st->needs_bus_recovery || config_change)
+        {
             /* Defer to i2c_poll() for heavy work */
-            st->msg     = NULL;
+            st->msg = NULL;
             st->current = NULL;
-            st->status  = I2C_BUS_IDLE;
-        } else {
-            st->q_head  = (st->q_head + 1) % I2C_ASYNC_QUEUE_DEPTH;
+            st->status = I2C_BUS_IDLE;
+        }
+        else
+        {
+            st->q_head = (st->q_head + 1) % I2C_ASYNC_QUEUE_DEPTH;
             st->q_count--;
 
-            st->slave       = next_slave;
-            st->msg         = next.msg;
-            st->current     = next.msg->transfers;
+            st->slave = next_slave;
+            st->msg = next.msg;
+            st->current = next.msg->transfers;
             st->error_flags = 0;
 
-            if (i2c_start_transfer(st) < 0) {
+            if (i2c_start_transfer(st) < 0)
+            {
                 s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
                 st->needs_recovery = true;
                 st->recovery_flags |= I2C_ERR_TIMEOUT;
-                st->msg     = NULL;
+                st->msg = NULL;
                 st->current = NULL;
-                st->status  = I2C_BUS_IDLE;
+                st->status = I2C_BUS_IDLE;
             }
         }
-    } else {
-        st->msg    = NULL;
+    }
+    else
+    {
+        st->msg = NULL;
         st->status = I2C_BUS_IDLE;
     }
 
-    if (complete) complete(context, final_evt, final_err);
+    if (complete)
+        complete(context, final_evt, final_err);
 }
 
-static void s_apply_config(i2c_bus_state_t *st)
+static void
+s_apply_config(i2c_bus_state_t *st)
 {
-    if (st->bus->ops->apply_config) {
-        st->bus->ops->apply_config(st->bus->ctx,
-                                   st->slave->speed,
-                                   st->slave->addr_mode);
-        st->current_speed     = st->slave->speed;
+    if (st->bus->ops->apply_config)
+    {
+        st->bus->ops->apply_config(st->bus->ctx, st->slave->speed, st->slave->addr_mode);
+        st->current_speed = st->slave->speed;
         st->current_addr_mode = st->slave->addr_mode;
     }
 }
 
-static void s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags)
+static void
+s_complete_failed_message(struct i2c_message *msg, uint32_t error_flags)
 {
-    if (!msg || !msg->complete) return;
+    if (!msg || !msg->complete)
+        return;
     msg->complete(msg->context, I2C_EVT_ERROR, error_flags);
 }
 
-int i2c_async(int fd, struct i2c_message *msg)
+int
+i2c_async(int fd, struct i2c_message *msg)
 {
-    if (PLATFORM_IN_ISR()) return -1;
+    if (PLATFORM_IN_ISR())
+        return -1;
 
-    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave) return -1;
-    if (!msg || !msg->transfers || !msg->complete) return -1;
+    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave)
+        return -1;
+    if (!msg || !msg->transfers || !msg->complete)
+        return -1;
 
     struct i2c_slave *slave = fd_table[fd].slave;
-    struct i2c_bus   *bus   = fd_table[fd].bus;
-    int               bus_idx = fd_table[fd].bus_idx;
+    struct i2c_bus *bus = fd_table[fd].bus;
+    int bus_idx = fd_table[fd].bus_idx;
 
-    if (!bus || !bus->ops->transfer_one_it) return -1;
+    if (!bus || !bus->ops->transfer_one_it)
+        return -1;
 
     i2c_bus_state_t *st = &bus_state[bus_idx];
 
     uint32_t irq_state = i2c_enter_critical();
 
-    if (st->status == I2C_BUS_IDLE && st->q_count == 0) {
-        st->status      = I2C_BUS_ACTIVE;
-        st->slave       = slave;
-        st->bus         = bus;
-        st->msg         = msg;
-        st->current     = msg->transfers;
+    if (st->status == I2C_BUS_IDLE && st->q_count == 0)
+    {
+        st->status = I2C_BUS_ACTIVE;
+        st->slave = slave;
+        st->bus = bus;
+        st->msg = msg;
+        st->current = msg->transfers;
         st->error_flags = 0;
         i2c_exit_critical(irq_state);
 
         s_recover(st);
         s_apply_config(st);
-        if (i2c_start_transfer(st) < 0) {
+        if (i2c_start_transfer(st) < 0)
+        {
             uint32_t irq_state2 = i2c_enter_critical();
-            st->msg            = NULL;
-            st->current        = NULL;
-            st->status         = I2C_BUS_IDLE;
+            st->msg = NULL;
+            st->current = NULL;
+            st->status = I2C_BUS_IDLE;
             st->needs_recovery = true;
             st->recovery_flags |= I2C_ERR_TIMEOUT;
             i2c_exit_critical(irq_state2);
             return -1;
         }
-    } else {
-        if (st->q_count >= I2C_ASYNC_QUEUE_DEPTH) {
+    }
+    else
+    {
+        if (st->q_count >= I2C_ASYNC_QUEUE_DEPTH)
+        {
             i2c_exit_critical(irq_state);
             return -1;
         }
-        st->queue[st->q_tail].fd  = fd;
+        st->queue[st->q_tail].fd = fd;
         st->queue[st->q_tail].msg = msg;
-        st->q_tail  = (uint8_t)((st->q_tail + 1) % I2C_ASYNC_QUEUE_DEPTH);
+        st->q_tail = (uint8_t)((st->q_tail + 1) % I2C_ASYNC_QUEUE_DEPTH);
         st->q_count++;
         i2c_exit_critical(irq_state);
     }
@@ -526,51 +606,60 @@ int i2c_async(int fd, struct i2c_message *msg)
 /* Poll — thread-context work deferred from ISR                        */
 /* ------------------------------------------------------------------ */
 
-void i2c_poll(void)
+void
+i2c_poll(void)
 {
-    for (int i = 0; i < I2C_MAX_BUSES; i++) {
+    for (int i = 0; i < I2C_MAX_BUSES; i++)
+    {
         i2c_bus_state_t *st = &bus_state[i];
 
-        if (st->status != I2C_BUS_IDLE) continue;
+        if (st->status != I2C_BUS_IDLE)
+            continue;
         if (!st->needs_recovery && !st->needs_bus_recovery && st->q_count == 0)
             continue;
 
         uint32_t irq_state = i2c_enter_critical();
 
-        if (st->status != I2C_BUS_IDLE) {
+        if (st->status != I2C_BUS_IDLE)
+        {
             i2c_exit_critical(irq_state);
             continue;
         }
 
-        if (st->needs_recovery || st->needs_bus_recovery) {
+        if (st->needs_recovery || st->needs_bus_recovery)
+        {
             i2c_exit_critical(irq_state);
             s_recover(st);
             continue;
         }
 
-        if (st->q_count > 0) {
+        if (st->q_count > 0)
+        {
             i2c_queued_t next = st->queue[st->q_head];
-            st->q_head  = (st->q_head + 1) % I2C_ASYNC_QUEUE_DEPTH;
+            st->q_head = (st->q_head + 1) % I2C_ASYNC_QUEUE_DEPTH;
             st->q_count--;
 
-            st->slave       = fd_table[next.fd].slave;
-            st->msg         = next.msg;
-            st->current     = next.msg->transfers;
+            st->slave = fd_table[next.fd].slave;
+            st->msg = next.msg;
+            st->current = next.msg->transfers;
             st->error_flags = 0;
-            st->status      = I2C_BUS_ACTIVE;
+            st->status = I2C_BUS_ACTIVE;
 
             i2c_exit_critical(irq_state);
 
             s_apply_config(st);
-            if (i2c_start_transfer(st) < 0) {
+            if (i2c_start_transfer(st) < 0)
+            {
                 s_complete_failed_message(next.msg, I2C_ERR_TIMEOUT);
-                st->msg            = NULL;
-                st->current        = NULL;
-                st->status         = I2C_BUS_IDLE;
+                st->msg = NULL;
+                st->current = NULL;
+                st->status = I2C_BUS_IDLE;
                 st->needs_recovery = true;
                 st->recovery_flags |= I2C_ERR_TIMEOUT;
             }
-        } else {
+        }
+        else
+        {
             i2c_exit_critical(irq_state);
         }
     }
@@ -594,13 +683,16 @@ void i2c_poll(void)
  *      so async callers (regmap, sensor drivers) unblock and propagate the error
  *      up to sensor_mgr, which then notifies app via SENSOR_STATUS_RESET.
  */
-int i2c_reset(int fd)
+int
+i2c_reset(int fd)
 {
-    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave) return -1;
+    if (fd < 0 || fd >= I2C_MAX_SLAVES || !fd_table[fd].slave)
+        return -1;
 
-    struct i2c_bus  *bus     = fd_table[fd].bus;
-    int              bus_idx = fd_table[fd].bus_idx;
-    if (!bus) return -1;
+    struct i2c_bus *bus = fd_table[fd].bus;
+    int bus_idx = fd_table[fd].bus_idx;
+    if (!bus)
+        return -1;
 
     i2c_bus_state_t *st = &bus_state[bus_idx];
 
@@ -608,22 +700,22 @@ int i2c_reset(int fd)
     uint32_t irq_state = i2c_enter_critical();
 
     struct i2c_message *active_msg = st->msg;
-    i2c_queued_t        queue_copy[I2C_ASYNC_QUEUE_DEPTH];
-    uint8_t             q_count = st->q_count;
+    i2c_queued_t queue_copy[I2C_ASYNC_QUEUE_DEPTH];
+    uint8_t q_count = st->q_count;
 
     for (int i = 0; i < q_count; i++)
         queue_copy[i] = st->queue[(st->q_head + i) % I2C_ASYNC_QUEUE_DEPTH];
 
-    st->msg               = NULL;
-    st->current           = NULL;
-    st->status            = I2C_BUS_IDLE;
-    st->error_flags       = 0;
-    st->q_head            = 0;
-    st->q_tail            = 0;
-    st->q_count           = 0;
-    st->needs_recovery    = false;
+    st->msg = NULL;
+    st->current = NULL;
+    st->status = I2C_BUS_IDLE;
+    st->error_flags = 0;
+    st->q_head = 0;
+    st->q_tail = 0;
+    st->q_count = 0;
+    st->needs_recovery = false;
     st->needs_bus_recovery = false;
-    st->recovery_flags    = 0;
+    st->recovery_flags = 0;
 
     i2c_exit_critical(irq_state);
 
@@ -637,7 +729,8 @@ int i2c_reset(int fd)
     if (active_msg && active_msg->complete)
         active_msg->complete(active_msg->context, I2C_EVT_ERROR, I2C_ERR_ABORT);
 
-    for (int i = 0; i < q_count; i++) {
+    for (int i = 0; i < q_count; i++)
+    {
         struct i2c_message *qmsg = queue_copy[i].msg;
         if (qmsg && qmsg->complete)
             qmsg->complete(qmsg->context, I2C_EVT_ERROR, I2C_ERR_ABORT);
@@ -650,22 +743,20 @@ int i2c_reset(int fd)
 /* Convenience wrappers                                                 */
 /* ------------------------------------------------------------------ */
 
-int i2c_write(int fd, const uint8_t *buf, uint16_t len)
+int
+i2c_write(int fd, const uint8_t *buf, uint16_t len)
 {
-    struct i2c_transfer xfer = {
-        .dir = I2C_DIR_WRITE, .buf = (uint8_t *)buf, .len = len
-    };
+    struct i2c_transfer xfer = {.dir = I2C_DIR_WRITE, .buf = (uint8_t *)buf, .len = len};
     struct i2c_message msg;
     i2c_message_init(&msg);
     i2c_message_add_transfer(&msg, &xfer);
     return i2c_sync(fd, &msg);
 }
 
-int i2c_read(int fd, uint8_t *buf, uint16_t len)
+int
+i2c_read(int fd, uint8_t *buf, uint16_t len)
 {
-    struct i2c_transfer xfer = {
-        .dir = I2C_DIR_READ, .buf = buf, .len = len
-    };
+    struct i2c_transfer xfer = {.dir = I2C_DIR_READ, .buf = buf, .len = len};
     struct i2c_message msg;
     i2c_message_init(&msg);
     i2c_message_add_transfer(&msg, &xfer);
@@ -684,30 +775,33 @@ int i2c_read(int fd, uint8_t *buf, uint16_t len)
  * Max payload: 2-byte address + I2C_MEM_WRITE_MAX_DATA bytes of data.
  * I2C_MEM_WRITE_MAX_DATA is defined in i2c.h and visible to callers.
  */
-int i2c_mem_write(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
-                  const uint8_t *buf, uint16_t len)
+int
+i2c_mem_write(int fd, uint16_t mem_addr, uint8_t mem_addr_size, const uint8_t *buf, uint16_t len)
 {
-    assert(len <= I2C_MEM_WRITE_MAX_DATA);   /* programming error: increase limit or split writes */
-    if (len > I2C_MEM_WRITE_MAX_DATA) return -1;
+    assert(len <= I2C_MEM_WRITE_MAX_DATA); /* programming error: increase limit or split writes */
+    if (len > I2C_MEM_WRITE_MAX_DATA)
+        return -1;
 
-    uint8_t  combined[2 + I2C_MEM_WRITE_MAX_DATA];
+    uint8_t combined[2 + I2C_MEM_WRITE_MAX_DATA];
     uint16_t addr_len;
 
-    if(!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2)) return -1;
+    if (!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2))
+        return -1;
 
-    if (mem_addr_size == 2) {
+    if (mem_addr_size == 2)
+    {
         combined[0] = (uint8_t)(mem_addr >> 8);
         combined[1] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 2;
-    } else {
+    }
+    else
+    {
         combined[0] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 1;
     }
     memcpy(combined + addr_len, buf, len);
 
-    struct i2c_transfer xfer = {
-        .dir = I2C_DIR_WRITE, .buf = combined, .len = addr_len + len
-    };
+    struct i2c_transfer xfer = {.dir = I2C_DIR_WRITE, .buf = combined, .len = addr_len + len};
     struct i2c_message msg;
     i2c_message_init(&msg);
     i2c_message_add_transfer(&msg, &xfer);
@@ -720,29 +814,29 @@ int i2c_mem_write(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
  * Two transfers: WRITE (addr bytes) + READ (data bytes), mapped to
  * I2C_XFER_FIRST and I2C_XFER_LAST by get_xfer_options().
  */
-int i2c_mem_read(int fd, uint16_t mem_addr, uint8_t mem_addr_size,
-                 uint8_t *buf, uint16_t len)
+int
+i2c_mem_read(int fd, uint16_t mem_addr, uint8_t mem_addr_size, uint8_t *buf, uint16_t len)
 {
     uint8_t addr_buf[2];
     uint16_t addr_len;
 
-    if(!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2)) return -1;
+    if (!buf || len == 0 || (mem_addr_size != 1 && mem_addr_size != 2))
+        return -1;
 
-    if (mem_addr_size == 2) {
+    if (mem_addr_size == 2)
+    {
         addr_buf[0] = (uint8_t)(mem_addr >> 8);
         addr_buf[1] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 2;
-    } else {
+    }
+    else
+    {
         addr_buf[0] = (uint8_t)(mem_addr & 0xFF);
         addr_len = 1;
     }
 
-    struct i2c_transfer xfer_addr = {
-        .dir = I2C_DIR_WRITE, .buf = addr_buf, .len = addr_len
-    };
-    struct i2c_transfer xfer_data = {
-        .dir = I2C_DIR_READ, .buf = buf, .len = len
-    };
+    struct i2c_transfer xfer_addr = {.dir = I2C_DIR_WRITE, .buf = addr_buf, .len = addr_len};
+    struct i2c_transfer xfer_data = {.dir = I2C_DIR_READ, .buf = buf, .len = len};
 
     struct i2c_message msg;
     i2c_message_init(&msg);

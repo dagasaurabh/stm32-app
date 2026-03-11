@@ -1,6 +1,6 @@
 set(P uart_driver)
 
-add_library(${P}_obj OBJECT 
+add_library(${P}_obj OBJECT
     ${CMAKE_CURRENT_LIST_DIR}/uart_driver.c
     ${CMAKE_CURRENT_LIST_DIR}/uart_hal.c
 )

@@ -17,21 +17,23 @@
  *   regmap_t *map = regmap_i2c_init(&g_map, i2c_open("i2c2.hts221"));
  *   hts221_t *dev = hts221_init(map);
  */
-typedef struct {
-    regmap_t            map;
-    int                 fd;
+typedef struct
+{
+    regmap_t map;
+    int fd;
 
     /* Async state — one in-flight operation at a time */
-    struct i2c_message  msg;
+    struct i2c_message msg;
     struct i2c_transfer xfer_reg;  /* write: register address byte */
     struct i2c_transfer xfer_data; /* read:  payload buffer */
-    uint8_t             reg_buf;   /* scratch: holds reg addr during async op */
-    regmap_cb_t         cb;
-    void               *cb_ctx;
+    uint8_t reg_buf;               /* scratch: holds reg addr during async op */
+    regmap_cb_t cb;
+    void *cb_ctx;
 } regmap_i2c_t;
 
 /*
  * regmap_i2c_init — wire ops into self->map, store fd, return &self->map.
  * Returns NULL if self or fd is invalid.
  */
-regmap_t *regmap_i2c_init(regmap_i2c_t *self, int fd);
+regmap_t *
+regmap_i2c_init(regmap_i2c_t *self, int fd);

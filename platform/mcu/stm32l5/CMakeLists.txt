@@ -9,14 +9,14 @@ add_library(${P} OBJECT
 
 # Inherit MCU flags from platform_mcu
 target_link_libraries(${P}
-    PRIVATE ${MCU_TOOLCHAIN_LIB} 
+    PRIVATE ${MCU_TOOLCHAIN_LIB}
     PRIVATE ${MCU_HAL_LIB}
     PRIVATE mcu_syscalls)
 
 
 # MCU Interface library
 add_library(mcu_core INTERFACE)
-target_sources(mcu_core INTERFACE 
+target_sources(mcu_core INTERFACE
     $<TARGET_OBJECTS:mcu_syscalls>
     $<TARGET_OBJECTS:${P}>
 )

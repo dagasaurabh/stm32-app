@@ -21,7 +21,8 @@
 #define HTS221_MAX_DEVICES 1
 #endif
 
-typedef struct {
+typedef struct
+{
     float temp_c;
     float humidity_pct;
 } hts221_data_t;
@@ -30,4 +31,5 @@ typedef struct {
  * hts221_init — WHO_AM_I check, power-on, calibration read.
  * Returns sensor_t * on success, NULL on error or pool exhaustion.
  */
-sensor_t *hts221_init(regmap_t *map);
+sensor_t *
+hts221_init(regmap_t *map);

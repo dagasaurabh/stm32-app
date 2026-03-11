@@ -26,26 +26,27 @@
  *   regmap_t *map = regmap_spi_init(&g_map, spi_open("spi1.hts221"), 0x80, 0x40);
  *   hts221_t *dev = hts221_init(map);
  */
-typedef struct {
-    regmap_t           map;
-    int                fd;
-    uint8_t            rw_bit_mask;
-    uint8_t            ai_bit_mask;
+typedef struct
+{
+    regmap_t map;
+    int fd;
+    uint8_t rw_bit_mask;
+    uint8_t ai_bit_mask;
 
     /* Async state — one in-flight operation at a time */
-    struct spi_message  msg;
+    struct spi_message msg;
     struct spi_transfer xfer;
-    uint8_t             tx_buf[REGMAP_SPI_MAX_DATA + 1];
-    uint8_t             rx_buf[REGMAP_SPI_MAX_DATA + 1];
-    uint8_t            *data_buf;
-    uint16_t            data_len;
-    regmap_cb_t         cb;
-    void               *cb_ctx;
+    uint8_t tx_buf[REGMAP_SPI_MAX_DATA + 1];
+    uint8_t rx_buf[REGMAP_SPI_MAX_DATA + 1];
+    uint8_t *data_buf;
+    uint16_t data_len;
+    regmap_cb_t cb;
+    void *cb_ctx;
 } regmap_spi_t;
 
 /*
  * regmap_spi_init — wire ops into self->map, store fd and bit masks, return &self->map.
  * Returns NULL if self or fd is invalid.
  */
-regmap_t *regmap_spi_init(regmap_spi_t *self, int fd,
-        uint8_t rw_bit_mask, uint8_t ai_bit_mask);
+regmap_t *
+regmap_spi_init(regmap_spi_t *self, int fd, uint8_t rw_bit_mask, uint8_t ai_bit_mask);

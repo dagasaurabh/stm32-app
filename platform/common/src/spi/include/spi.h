@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "gpio.h"
-#include "spi_types.h"   /* spi_evt_t, SPI_ERR_*, spi_cb_t */
+#include "spi_types.h" /* spi_evt_t, SPI_ERR_*, spi_cb_t */
 
 /*
  * spi_transfer — one segment of an SPI message.
@@ -15,12 +15,13 @@
  *             brief CS pulse between command and data phases)
  * next      : linked list - do not set manually, use spi_message_add_transfer()
  */
-struct spi_transfer {
-    const uint8_t      *tx_buf;
-    uint8_t            *rx_buf;
-    uint16_t            len;
-    uint8_t             cs_change;
-    struct spi_transfer *next;      /* set by spi_message_add_transfer() */
+struct spi_transfer
+{
+    const uint8_t *tx_buf;
+    uint8_t *rx_buf;
+    uint16_t len;
+    uint8_t cs_change;
+    struct spi_transfer *next; /* set by spi_message_add_transfer() */
 };
 
 /*
@@ -32,11 +33,12 @@ struct spi_transfer {
  * For spi_async(), set complete and context before calling spi_async().
  * complete() is called from ISR when all transfers finish.
  */
-struct spi_message {
+struct spi_message
+{
     struct spi_transfer *transfers; /* head of transfer list */
     struct spi_transfer *tail;      /* tail - for O(1) append */
-    spi_cb_t             complete;  /* async completion callback (NULL for sync) */
-    void                *context;  /* passed to complete() */
+    spi_cb_t complete;              /* async completion callback (NULL for sync) */
+    void *context;                  /* passed to complete() */
 };
 
 /*
@@ -48,13 +50,15 @@ struct spi_message {
  *   transfer_one    : blocking raw segment.
  *   transfer_one_it : non-blocking; cb(cb_ctx, status) called from ISR.
  */
-struct spi_bus_ops {
+struct spi_bus_ops
+{
     int (*open)(void *ctx);
     int (*close)(void *ctx);
     int (*transfer_one)(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len);
-    int (*transfer_one_it)(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len,
-                           spi_cb_t cb, void *cb_ctx);
-    int (*apply_config)(void *ctx, spi_mode_t mode, spi_clkdiv_t prescaler, spi_datasize_t datasize);
+    int (*transfer_one_it)(void *ctx, const uint8_t *tx, uint8_t *rx, uint16_t len, spi_cb_t cb,
+                           void *cb_ctx);
+    int (*apply_config)(void *ctx, spi_mode_t mode, spi_clkdiv_t prescaler,
+                        spi_datasize_t datasize);
     int (*recover)(void *ctx, uint32_t error_flags);
     /*
      * bus_recover — peripheral abort + DeInit + Init.
@@ -68,10 +72,11 @@ struct spi_bus_ops {
 };
 
 /* A SPI hardware controller */
-struct spi_bus {
-    const char              *name;  /* "spi1", "spi2", … */
+struct spi_bus
+{
+    const char *name; /* "spi1", "spi2", … */
     const struct spi_bus_ops *ops;
-    void                    *ctx;
+    void *ctx;
 };
 
 /*
@@ -80,42 +85,55 @@ struct spi_bus {
  *   bus_name - must match a registered spi_bus
  *   cs_pin   - GPIO driven by spi_sync()/spi_async() around each message
  */
-struct spi_slave {
+struct spi_slave
+{
     const char *name;
     const char *bus_name;
-    gpio_pin_t  cs_pin;
+    gpio_pin_t cs_pin;
 
     /* Compile-time configuration */
-    spi_mode_t      mode;        /* SPI_MODE_0..3 */
-    spi_clkdiv_t    prescaler;   /* HAL prescaler value */
-    spi_datasize_t  datasize;    /* 8 or 16 */
+    spi_mode_t mode;         /* SPI_MODE_0..3 */
+    spi_clkdiv_t prescaler;  /* HAL prescaler value */
+    spi_datasize_t datasize; /* 8 or 16 */
 };
 
 /* SPI bus and slave registration called by board layer during init */
-int spi_bus_register(struct spi_bus *bus);
-int spi_slave_register(struct spi_slave *slave);
+int
+spi_bus_register(struct spi_bus *bus);
+int
+spi_slave_register(struct spi_slave *slave);
 
 /* Message API */
-void spi_message_init(struct spi_message *msg);
-void spi_message_add_transfer(struct spi_message *msg, struct spi_transfer *xfer);
+void
+spi_message_init(struct spi_message *msg);
+void
+spi_message_add_transfer(struct spi_message *msg, struct spi_transfer *xfer);
 
 /*
  * spi_sync  — execute a message atomically, blocking until complete.
  * spi_async — start a message non-blocking; msg->complete() triggered from ISR.
  *             Returns -1 if the bus is busy or transfer_one_it is not set.
  */
-int spi_sync(int fd, struct spi_message *msg);
-int spi_async(int fd, struct spi_message *msg);
+int
+spi_sync(int fd, struct spi_message *msg);
+int
+spi_async(int fd, struct spi_message *msg);
 
 /* Application API */
-int spi_open(const char *slave_name);  /* returns fd */
-int spi_close(int fd);
-int spi_write(int fd, const uint8_t *buf, uint16_t len);
-int spi_read(int fd, uint8_t *buf, uint16_t len);
-int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len);
+int
+spi_open(const char *slave_name); /* returns fd */
+int
+spi_close(int fd);
+int
+spi_write(int fd, const uint8_t *buf, uint16_t len);
+int
+spi_read(int fd, uint8_t *buf, uint16_t len);
+int
+spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /* spi_poll -  needs to be called explicitly when using spi in async mode */
-void spi_poll(void);
+void
+spi_poll(void);
 
 /*
  * spi_reset — abort in-flight and queued transfers, deassert CS, recover bus.
@@ -124,4 +142,5 @@ void spi_poll(void);
  * callers unblock.  Must NOT be called from ISR context.
  * Returns 0 on success, -1 if fd is invalid.
  */
-int spi_reset(int fd);
+int
+spi_reset(int fd);
