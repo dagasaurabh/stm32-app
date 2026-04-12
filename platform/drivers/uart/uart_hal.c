@@ -261,8 +261,19 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     uart_hal_slot_t *s = s_find_slot(huart->Instance);
     if (!s) return;
 
-    /* Fire TX done to unblock tx_busy in the driver layer. */
-    if (s->tx_cb)
+    /* Only signal TX completion for TX-side faults.
+     *
+     * RX-line errors (PE/FE/NE/ORE) can happen while TX is still in-flight;
+     * treating those as "TX done" can make the driver drop queued bytes.
+     * DMA error is the only HAL error class that can be TX-related here, and
+     * it is considered TX-side only when the TX DMA stream reports an error.
+     */
+    const uint32_t tx_dma_fault =
+        ((huart->ErrorCode & HAL_UART_ERROR_DMA) != 0U) &&
+        (huart->hdmatx != NULL) &&
+        (huart->hdmatx->ErrorCode != HAL_DMA_ERROR_NONE);
+
+    if (s->tx_cb && tx_dma_fault)
     {
         uart_hal_tx_cb_t cb  = s->tx_cb;
         void            *ctx = s->tx_ctx;
