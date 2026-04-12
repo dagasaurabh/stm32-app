@@ -20,5 +20,8 @@ add_library(${P} INTERFACE)
 target_link_libraries(${P} INTERFACE platform_common board_common uart_driver)
 target_sources(${P} INTERFACE $<TARGET_OBJECTS:${P}_obj>)
 
+# Expose BOARD_HAS_CONSOLE so application code can guard console-only paths
+target_compile_definitions(${P} INTERFACE BOARD_HAS_CONSOLE=1)
+
 
 set_property(TARGET ${P}_obj PROPERTY EXCLUDE_FROM_ALL TRUE)

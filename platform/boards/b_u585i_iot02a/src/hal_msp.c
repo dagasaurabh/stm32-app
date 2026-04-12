@@ -30,6 +30,9 @@ HAL_UART_MspInit(UART_HandleTypeDef *huart)
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        HAL_NVIC_SetPriority(USART1_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(USART1_IRQn);
     }
 }
 

@@ -98,6 +98,9 @@ HAL_UART_MspInit(UART_HandleTypeDef *huart)
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
         HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+        HAL_NVIC_SetPriority(LPUART1_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(LPUART1_IRQn);
     }
 
     if (huart->Instance == USART3)
