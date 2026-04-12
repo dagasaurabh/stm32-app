@@ -11,8 +11,16 @@ _write(int fd, const char *buf, int len)
 int
 _read(int fd, char *buf, int len)
 {
-    /* Spin-wait until at least one byte is available, then drain.*/
-    while (serial_read_available(fd) == 0);
+    /*
+     * Use read_available() when implemented. If unsupported, fall back
+     * directly to the backend's blocking read() path.
+     */
+    int avail = serial_read_available(fd);
+    if (avail < 0) return -1;
+    if (avail == SERIAL_READ_AVAIL_UNSUPPORTED) return serial_read(fd, (uint8_t *)buf, len);
+
+    while (avail == 0) avail = serial_read_available(fd);
+    if (avail < 0) return -1;
 
     return serial_read(fd, (uint8_t *)buf, len);
 }

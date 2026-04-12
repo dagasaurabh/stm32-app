@@ -97,7 +97,7 @@ serial_read_available(int fd)
     if (fd < 0 || fd >= SERIAL_FD_TABLE_SIZE || !fd_table[fd].dev) return -1;
 
     const struct serial_ops *ops = fd_table[fd].dev->ops;
-    if (!ops->read_available) return 0; /* backend has no availability check — treat as blocking */
+    if (!ops->read_available) return SERIAL_READ_AVAIL_UNSUPPORTED;
 
     return ops->read_available(fd_table[fd].dev->ctx);
 }

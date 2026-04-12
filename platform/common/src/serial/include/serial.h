@@ -6,6 +6,7 @@
 
 /* Total fd slots: 0-2 = stdio, 3-(SERIAL_FD_TABLE_SIZE-1) = generic */
 #define SERIAL_FD_TABLE_SIZE 8
+#define SERIAL_READ_AVAIL_UNSUPPORTED (-2)
 
 typedef enum
 {
@@ -21,8 +22,7 @@ struct serial_ops
     int (*read)(void *ctx, uint8_t *buf, size_t len);
     /*
      * read_available — returns the number of bytes waiting in the RX
-     * buffer without consuming them.  Optional: NULL is treated as 0
-     * (always blocking behaviour in syscalls._read spin-wait).
+     * buffer without consuming them. Optional.
      */
     int (*read_available)(void *ctx);
 };
@@ -64,7 +64,7 @@ int   serial_read(int fd, uint8_t *buf, size_t len);
 
 /*
  * serial_read_available — bytes waiting in the RX buffer for fd.
- *   Returns 0 if ops->read_available is NULL (i.e. always-blocking
- *   backend).  Returns -1 for an invalid fd.
+ *   Returns SERIAL_READ_AVAIL_UNSUPPORTED if ops->read_available is
+ *   NULL. Returns -1 for an invalid fd.
  */
 int   serial_read_available(int fd);
