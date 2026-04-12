@@ -109,14 +109,14 @@ uart_drv_deinit(uart_t *u)
 int
 uart_drv_configure(uart_t *u, const uart_cfg_t *cfg)
 {
-    if (!u || !cfg) return -1;
+    if (!u || !u->hal || !cfg) return -1;
     return uart_hal_configure(u->hal, cfg->baud, cfg->wordlen, cfg->stop, cfg->parity);
 }
 
 int
 uart_drv_write(uart_t *u, const uint8_t *buf, size_t len)
 {
-    if (!u || !buf) return -1;
+    if (!u || !u->hal || !buf) return -1;
     if (len == 0) return 0;
 
     uint32_t primask;
@@ -154,7 +154,7 @@ uart_drv_write(uart_t *u, const uint8_t *buf, size_t len)
 int
 uart_drv_read(uart_t *u, uint8_t *buf, size_t len)
 {
-    if (!u || !buf) return -1;
+    if (!u || !u->hal || !buf) return -1;
 
     uint32_t primask;
     PLATFORM_IRQ_SAVE(primask);
@@ -174,6 +174,6 @@ uart_drv_read(uart_t *u, uint8_t *buf, size_t len)
 int
 uart_drv_read_available(uart_t *u)
 {
-    if (!u) return -1;
+    if (!u || !u->hal) return -1;
     return (int)u->rx_count;
 }
