@@ -23,6 +23,9 @@ typedef struct
     void             *tx_ctx;
     uart_hal_rx_cb_t  rx_cb;
     void             *rx_ctx;
+    uint8_t          *rx_buf;
+    uint16_t          rx_len;
+    uint8_t           rx_use_dma;
 } uart_hal_slot_t;
 
 static uart_hal_slot_t hal_slots[UART_HAL_MAX_INSTANCES];
@@ -52,6 +55,19 @@ s_alloc_slot(USART_TypeDef *inst)
         }
     }
     return NULL;
+}
+
+static int
+s_rearm_rx(UART_HandleTypeDef *huart, uart_hal_slot_t *s)
+{
+    HAL_StatusTypeDef rc;
+
+    if (s->rx_use_dma && huart->hdmarx)
+        rc = HAL_UARTEx_ReceiveToIdle_DMA(huart, s->rx_buf, s->rx_len);
+    else
+        rc = HAL_UARTEx_ReceiveToIdle_IT(huart, s->rx_buf, s->rx_len);
+
+    return (rc == HAL_OK) ? 0 : -1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -149,12 +165,17 @@ uart_hal_rx_it(void *hal, uint8_t *buf, uint16_t buf_len,
 
     s->rx_cb  = cb;
     s->rx_ctx = ctx;
+    s->rx_buf = buf;
+    s->rx_len = buf_len;
+    s->rx_use_dma = 0;
 
-    HAL_StatusTypeDef rc = HAL_UARTEx_ReceiveToIdle_IT(huart, buf, buf_len);
-    if (rc != HAL_OK)
+    if (s_rearm_rx(huart, s) != 0)
     {
         s->rx_cb  = NULL;
         s->rx_ctx = NULL;
+        s->rx_buf = NULL;
+        s->rx_len = 0;
+        s->rx_use_dma = 0;
         return -1;
     }
     return 0;
@@ -211,12 +232,17 @@ uart_hal_rx_dma(void *hal, uint8_t *buf, uint16_t buf_len,
 
     s->rx_cb  = cb;
     s->rx_ctx = ctx;
+    s->rx_buf = buf;
+    s->rx_len = buf_len;
+    s->rx_use_dma = 1;
 
-    HAL_StatusTypeDef rc = HAL_UARTEx_ReceiveToIdle_DMA(huart, buf, buf_len);
-    if (rc != HAL_OK)
+    if (s_rearm_rx(huart, s) != 0)
     {
         s->rx_cb  = NULL;
         s->rx_ctx = NULL;
+        s->rx_buf = NULL;
+        s->rx_len = 0;
+        s->rx_use_dma = 0;
         return -1;
     }
     return 0;
@@ -282,7 +308,8 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         cb(ctx);
     }
 
-    /* Clear RX slot; driver will re-arm on next poll / re-init. */
-    s->rx_cb  = NULL;
-    s->rx_ctx = NULL;
+    /* RX-line errors abort ReceiveToIdle in HAL. Re-arm using the last
+     * registered buffer so RX callbacks continue without requiring re-init. */
+    if (s->rx_cb && s->rx_buf && s->rx_len > 0U)
+        (void)s_rearm_rx(huart, s);
 }
