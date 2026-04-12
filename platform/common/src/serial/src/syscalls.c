@@ -11,15 +11,18 @@ _write(int fd, const char *buf, int len)
 int
 _read(int fd, char *buf, int len)
 {
+    /* Spin-wait until at least one byte is available, then drain.*/
+    while (serial_read_available(fd) == 0);
+
     return serial_read(fd, (uint8_t *)buf, len);
 }
 
 int
 _close(int fd)
 {
-    (void)fd;
-    return 0;
+    return serial_close(fd);
 }
+
 int
 _lseek(int fd, int ptr, int dir)
 {
