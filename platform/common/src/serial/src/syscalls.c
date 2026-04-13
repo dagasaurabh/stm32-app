@@ -16,8 +16,8 @@ _read(int fd, char *buf, int len)
      * directly to the backend's blocking read() path.
      */
     int avail = serial_read_available(fd);
-    if (avail < 0) return -1;
     if (avail == SERIAL_READ_AVAIL_UNSUPPORTED) return serial_read(fd, (uint8_t *)buf, len);
+    if (avail < 0) return -1;
 
     while (avail == 0) avail = serial_read_available(fd);
     if (avail < 0) return -1;
