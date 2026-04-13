@@ -11,15 +11,26 @@ _write(int fd, const char *buf, int len)
 int
 _read(int fd, char *buf, int len)
 {
+    /*
+     * Use read_available() when implemented. If unsupported, fall back
+     * directly to the backend's blocking read() path.
+     */
+    int avail = serial_read_available(fd);
+    if (avail == SERIAL_READ_AVAIL_UNSUPPORTED) return serial_read(fd, (uint8_t *)buf, len);
+    if (avail < 0) return -1;
+
+    while (avail == 0) avail = serial_read_available(fd);
+    if (avail < 0) return -1;
+
     return serial_read(fd, (uint8_t *)buf, len);
 }
 
 int
 _close(int fd)
 {
-    (void)fd;
-    return 0;
+    return serial_close(fd);
 }
+
 int
 _lseek(int fd, int ptr, int dir)
 {

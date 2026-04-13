@@ -6,38 +6,36 @@ struct fd_entry
     struct serial_device *dev;
 };
 
-static struct fd_entry fd_table[SERIAL_MAX_DEVICES];
-static int next_fd = 3; /* 0,1,2 reserved */
-
-static int stdio_fd = -1;
+static struct fd_entry fd_table[SERIAL_FD_TABLE_SIZE];
+static int next_fd   = 3; /* 0,1,2 reserved for stdio */
+static int stdio_fd  = -1;
 
 int
 serial_register(struct serial_device *dev, serial_role_t role)
 {
-    int fd;
+    int fd = 0;
 
-    if (!dev || !dev->ops || !dev->ops->write || !dev->ops->read)
-        return -1;
+    if (!dev || !dev->ops || !dev->ops->write || !dev->ops->read) return -1;
 
-    if (role == SERIAL_ROLE_STDIO && stdio_fd == -1)
+    if (role == SERIAL_ROLE_STDIO)
     {
-        fd = 1; /* stdout */
+        if (stdio_fd != -1) return -1; /* already registered — reject double-register */
+
+        fd       = 1; /* return stdout fd */
         stdio_fd = fd;
-        fd_table[0].dev = dev; /* stdin */
+        fd_table[0].dev = dev; /* stdin  */
         fd_table[1].dev = dev; /* stdout */
         fd_table[2].dev = dev; /* stderr */
     }
     else
     {
-        if (next_fd >= SERIAL_MAX_DEVICES)
-            return -1;
+        if (next_fd >= SERIAL_FD_TABLE_SIZE) return -1;
 
         fd = next_fd++;
         fd_table[fd].dev = dev;
     }
 
-    if (dev->ops->open)
-        dev->ops->open(dev->ctx);
+    if (dev->ops->open) dev->ops->open(dev->ctx);
 
     return fd;
 }
@@ -45,10 +43,10 @@ serial_register(struct serial_device *dev, serial_role_t role)
 int
 serial_open(const char *name)
 {
-    for (int i = 0; i < SERIAL_MAX_DEVICES; i++)
+    /* Scan generic slots only — never return a stdio fd (0-2). */
+    for (int i = 3; i < SERIAL_FD_TABLE_SIZE; i++)
     {
-        if (fd_table[i].dev && strcmp(fd_table[i].dev->name, name) == 0)
-            return i;
+        if (fd_table[i].dev && strcmp(fd_table[i].dev->name, name) == 0) return i;
     }
     return -1;
 }
@@ -58,17 +56,29 @@ serial_fopen(const char *name, const char *mode)
 {
     int fd = serial_open(name);
 
-    if (fd < 0)
-        return NULL;
+    if (fd < 0) return NULL;
 
     return fdopen(fd, mode);
 }
 
 int
+serial_close(int fd)
+{
+    if (fd < 0 || fd >= SERIAL_FD_TABLE_SIZE || !fd_table[fd].dev) return -1;
+
+    if (fd <= 2) return -1; /* stdio fds may not be closed */
+
+    /* Call ops->close before clearing the slot */
+    if (fd_table[fd].dev->ops->close) fd_table[fd].dev->ops->close(fd_table[fd].dev->ctx);
+
+    fd_table[fd].dev = NULL;
+    return 0;
+}
+
+int
 serial_write(int fd, const uint8_t *buf, size_t len)
 {
-    if (fd < 0 || fd >= SERIAL_MAX_DEVICES || !fd_table[fd].dev)
-        return -1;
+    if (fd < 0 || fd >= SERIAL_FD_TABLE_SIZE || !fd_table[fd].dev) return -1;
 
     return fd_table[fd].dev->ops->write(fd_table[fd].dev->ctx, buf, len);
 }
@@ -76,22 +86,18 @@ serial_write(int fd, const uint8_t *buf, size_t len)
 int
 serial_read(int fd, uint8_t *buf, size_t len)
 {
-    if (fd < 0 || fd >= SERIAL_MAX_DEVICES || !fd_table[fd].dev)
-        return -1;
+    if (fd < 0 || fd >= SERIAL_FD_TABLE_SIZE || !fd_table[fd].dev) return -1;
 
     return fd_table[fd].dev->ops->read(fd_table[fd].dev->ctx, buf, len);
 }
 
 int
-serial_close(int fd)
+serial_read_available(int fd)
 {
-    if (fd < 0 || fd >= SERIAL_MAX_DEVICES || !fd_table[fd].dev)
-        return -1;
+    if (fd < 0 || fd >= SERIAL_FD_TABLE_SIZE || !fd_table[fd].dev) return -1;
 
-    if (fd >= 0 && fd <= 2)
-        return -1;
+    const struct serial_ops *ops = fd_table[fd].dev->ops;
+    if (!ops->read_available) return SERIAL_READ_AVAIL_UNSUPPORTED;
 
-    fd_table[fd].dev = NULL;
-
-    return 0;
+    return ops->read_available(fd_table[fd].dev->ctx);
 }
