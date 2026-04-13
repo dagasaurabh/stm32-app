@@ -33,8 +33,17 @@ tx_done_cb(void *ctx)
         u->tx_inflight = chunk;
         u->tx_busy     = 1;
 
-        if (u->dma_tx) uart_hal_tx_dma(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
-        else uart_hal_tx_it(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+        int rc;
+        if (u->dma_tx) rc = uart_hal_tx_dma(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+        else           rc = uart_hal_tx_it(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+
+        if (rc != 0)
+        {
+            /* HAL rejected the transfer — no completion callback will fire.
+             * Roll back so tx_busy=0 and the next uart_drv_write can re-kick. */
+            u->tx_inflight = 0;
+            u->tx_busy     = 0;
+        }
     }
 }
 
@@ -143,8 +152,15 @@ uart_drv_write(uart_t *u, const uint8_t *buf, size_t len)
         u->tx_inflight = chunk;
         u->tx_busy     = 1;
 
-        if (u->dma_tx) uart_hal_tx_dma(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
-        else uart_hal_tx_it(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+        int rc;
+        if (u->dma_tx) rc = uart_hal_tx_dma(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+        else           rc = uart_hal_tx_it(u->hal, &u->tx_buf[tail], chunk, tx_done_cb, u);
+
+        if (rc != 0)
+        {
+            u->tx_inflight = 0;
+            u->tx_busy     = 0;
+        }
     }
 
     PLATFORM_IRQ_RESTORE(primask);
